@@ -50,17 +50,42 @@ jobs:
       - name: Install
         run: ${{ inputs.package-manager == 'pnpm' && 'pnpm install --frozen-lockfile' || 'npm ci' }}
 
-      # `--if-present` throughout: not every repo has every script, and a
-      # missing lint script should not read as a failing lint.
+      # Not every repo has every script, and a missing lint script must not
+      # read as a failing lint. `--if-present` is NOT the way to do this:
+      # npm parses the flag anywhere, but pnpm treats it as an argument TO the
+      # script and dies with ERR_PNPM_NO_SCRIPT. So test package.json directly
+      # - one behaviour, both package managers, and the log says which it did.
       - name: Lint
-        run: ${{ inputs.package-manager }} run lint --if-present
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.lint ? 0 : 1)"; then
+            ${{ inputs.package-manager }} run lint
+          else
+            echo "no lint script — skipped"
+          fi
 
       - name: Typecheck
         if: ${{ !inputs.skip-typecheck }}
-        run: ${{ inputs.package-manager }} run typecheck --if-present
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.typecheck ? 0 : 1)"; then
+            ${{ inputs.package-manager }} run typecheck
+          else
+            echo "no typecheck script — skipped"
+          fi
 
       - name: Test
-        run: ${{ inputs.test-command || format('{0} run test --if-present', inputs.package-manager) }}
+        run: |
+          if [ -n "${{ inputs.test-command }}" ]; then
+            ${{ inputs.test-command }}
+          elif node -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)"; then
+            ${{ inputs.package-manager }} run test
+          else
+            echo "no test script — skipped"
+          fi
 
       - name: Build
-        run: ${{ inputs.package-manager }} run build --if-present
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.build ? 0 : 1)"; then
+            ${{ inputs.package-manager }} run build
+          else
+            echo "no build script — skipped"
+          fi
