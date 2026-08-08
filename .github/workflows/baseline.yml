@@ -32,10 +32,10 @@ jobs:
       violations: ${{ steps.run.outputs.violations }}
       warnings: ${{ steps.run.outputs.warnings }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Fetch the standards
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: joeyheath65/standards
           ref: ${{ inputs.standards-ref }}
@@ -44,7 +44,7 @@ jobs:
       # Deliberately the runner's stock Python: the checker is stdlib-only, and
       # a baseline check that needs a toolchain to tell you your toolchain is
       # wrong is a circular dependency.
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
 
