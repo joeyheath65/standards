@@ -12,14 +12,6 @@ Closed items move to `BUILD_PLAN.md` shipped history in the same commit.
 
 ## 0 · Make the consumers real
 
-- P2. `[ ]` **OWNER** — **Install/authorise Renovate** on the account so the
-  shared preset resolves for all nine repos.
-- P3. `[ ]` **CODE** — Wire `inject.py` in the decision store to read
-  `baseline.json` and report per-repo deltas at SessionStart.
-- P4. `[ ]` **CODE** — PreToolUse guard beside `pretooluse_boundary.py` that runs
-  `baseline-check --json` on a `package.json` write and asks before adding a
-  below-floor dependency.
-
 ## 1 · Deliberate red
 
 ## 2 · Hygiene

@@ -3,9 +3,10 @@
 > **Progress:** ✅ Phase 1 (built, 9 enrolled) · ✅ Phase 2 (5 repos consuming `@v1`) ·
 > ✅ Phase 3 (punchlist CLI, 11 items pruned, status stripped from CLAUDE.md) ·
 > ✅ Phase 4 (branch protection, branch cleanup; commitlint deliberately skipped) ·
-> ⬜ **Phase 5 next** — verify the guards actually trip. Baseline `2026-08-08`.
-> Blocked on Joe: install the Renovate app (P2), and `lawndart-site` / `slotd-app`
-> are his to enrol.
+> ✅ Phase 5 (all four consumers live and verified) — **complete**. Baseline `2026-08-08`.
+>
+> All nine repos enrolled, 0 violations. Four consumers of `baseline.json` are
+> running: Renovate presets, CI, SessionStart injection, PreToolUse guard.
 
 ## Phases
 
@@ -56,6 +57,15 @@ and initial scaffolding. A gate for a problem that does not exist._
 
 ## Shipped
 
+- **P2** (2026-08-08) — **OWNER** — **Install/authorise Renovate** on the account so the
+  _superseded — self-hosted Renovate runs in 7 repos via the reusable workflow and each repo's own GITHUB_TOKEN. The hosted Mend app remains an optional one-click alternative (its only advantage: its PRs trigger other workflows, GITHUB_TOKEN PRs do not)_
+
+- **P4** (2026-08-08) — **CODE** — PreToolUse guard beside `pretooluse_boundary.py` that runs
+  _lib/depguard.py + bin/pretooluse_depguard.py; registered in settings.json beside the boundary hook_
+
+- **P3** (2026-08-08) — **CODE** — Wire `inject.py` in the decision store to read
+  _lib/baseline.py in the decision store; subprocess, silent when clean or unenrolled_
+
 - **P7** (2026-08-08) — **DOCS** — no tests for `baseline-check`. The `--today` flag exists
   _tests/test_baseline_check.py - precision, expiry, lockfile sync; run by self-test.yml_
 
@@ -67,3 +77,15 @@ and initial scaffolding. A gate for a problem that does not exist._
 
 - **P6** (2026-08-08) — **DOCS** — `bin/punchlist` (add/close/file) does not exist yet;
   _bin/punchlist shipped; ids are allocated, close prunes into shipped history_
+
+_Phase 5 done 2026-08-08 — the four consumers are live and each was verified against
+a real failure, not just a happy path. Renovate: dry run on gcp-autobot produced
+`renovate/n8n-+-runner`, a grouping that exists only in the shared preset, proving
+`#v1` resolution. CI: green across nine repos. SessionStart: reports clean / expiring
+/ expired correctly, and stays silent for an unenrolled directory. PreToolUse: asks on
+a below-floor write, stays silent when a live exception covers it, and reconstructs the
+resulting file for the Edit path.
+
+Two deliberate non-actions stand: no required status checks (they reject direct pushes
+to main, which is how Joe works), and no commitlint (93% conformance already; the
+misses are merge commits)._
