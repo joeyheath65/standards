@@ -119,12 +119,17 @@ jobs:
               || echo "::warning::formatting drift (report-only; set format-check: enforce to gate on it)"
           fi
 
+      # `flutter analyze` treats INFO-level lints as fatal by default, so the
+      # "non-strict" path has to say --no-fatal-infos explicitly. Without it,
+      # a repo mid-deprecation fails CI on its own intentional @deprecated
+      # annotations - which is what slotd-mobile did with 14 infos and zero
+      # warnings or errors. Warnings and errors still fail either way.
       - name: Analyze
         run: |
           if [ "${{ inputs.analyze-fatal-infos }}" = "true" ]; then
             flutter analyze --fatal-infos
           else
-            flutter analyze
+            flutter analyze --no-fatal-infos
           fi
 
       - name: Test
