@@ -12,10 +12,6 @@ Closed items move to `BUILD_PLAN.md` shipped history in the same commit.
 
 ## 0 · Make the consumers real
 
-- P1. `[ ]` **OWNER (next)** — **Create `github.com/joeyheath65/standards`, public,
-  push, tag `v1`.** Until this exists, the Renovate preset path and every
-  workflow `uses:` line resolve to nothing. Everything else in Phase 2 is
-  blocked on it.
 - P2. `[ ]` **OWNER** — **Install/authorise Renovate** on the account so the
   shared preset resolves for all nine repos.
 - P3. `[ ]` **CODE** — Wire `inject.py` in the decision store to read
@@ -26,18 +22,7 @@ Closed items move to `BUILD_PLAN.md` shipped history in the same commit.
 
 ## 1 · Deliberate red
 
-- P5. `[ ]` **CODE — `clients/mx-campaign`** — two real violations left red on
-  purpose, both needing a deploy test on a client repo:
-  `firebase-hosting.yml` runs **Node 18** (below floor; its own functions
-  declare `engines.node: 22`), and `@types/node ^25.2.3` types a runtime that
-  does not exist there. Fix together, verify the Firebase deploy, then re-check.
-
 ## 2 · Hygiene
-
-- P6. `[ ]` **DOCS** — `bin/punchlist` (add/close/file) does not exist yet;
-  Phase 3 depends on it. IDs are still hand-allocated until it lands.
-- P7. `[ ]` **DOCS** — no tests for `baseline-check`. The `--today` flag exists
-  precisely so expiry logic can be tested; nothing uses it yet.
 
 ---
 

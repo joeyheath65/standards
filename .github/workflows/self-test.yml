@@ -1,0 +1,50 @@
+name: self-test
+
+# The standards repo checks itself. If baseline-check is wrong, every repo
+# that consumes @v1 inherits the wrongness — so this gate matters more than
+# any single project's CI.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Unit tests
+        run: python3 tests/test_baseline_check.py
+
+      - name: Self-check (this repo against its own baseline)
+        run: python3 bin/baseline-check . --quiet
+
+      - name: Every JSON parses
+        run: |
+          for f in baseline.json platform.json inventory.json default.json profiles/*.json; do
+            python3 -c "import json,sys; json.load(open('$f')); print('  ok $f')"
+          done
+
+      - name: Every profile references a real check
+        run: |
+          python3 - <<'PY'
+          import json, glob, re
+          src = open("bin/baseline-check").read()
+          known = set(re.findall(r'^\s*"([a-z-]+)": lambda a:', src, re.M))
+          known |= set(re.findall(r'ABSORBED = \{([^}]*)\}', src, re.S)[0].replace('"','').replace("'","").split(','))
+          known = {k.strip() for k in known if k.strip()}
+          bad = []
+          for f in glob.glob("profiles/*.json"):
+              for c in json.load(open(f)).get("checks", []):
+                  if c not in known:
+                      bad.append(f"{f}: unknown check '{c}'")
+          if bad:
+              raise SystemExit("\n".join(bad))
+          print(f"  all profile checks resolve ({len(known)} known)")
+          PY
