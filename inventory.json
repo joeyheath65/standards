@@ -14,22 +14,52 @@
   "cloud": {
     "provider": "gcp",
     "orgId": "95147339940",
-    "billingAccount": { "id": "01AFCF-17141B-DC807B", "name": "Firebase Payment" },
-    "activeProjects": ["slotd-app", "lawn-dart"],
-    "dormantProjects": [
-      "client-mx-campaign", "proposals-static", "gsd-get-shit-done", "checkswingai",
-      "floresville-homepage", "floresville-home", "focusai-9983b", "ads-home-manage",
-      "ads-home-218e7", "legion-442616", "vibrant-petal-442616-u2"
+    "verified": "2026-08-08",
+    "verifiedBy": "gcloud as joe@lawndart.dev - projects list, billing projects describe, firestore/run/secrets/iam/services list",
+    "billingAccounts": {
+      "open": { "id": "01AFCF-17141B-DC807B", "name": "Firebase Payment" },
+      "closed": ["01343A-79C93E-21E6A3 (LD Products)", "01C056-3D49F3-EC28DE (My Billing Account)"]
+    },
+    "billedProjects": ["lawn-dart", "slotd-app", "client-mx-campaign"],
+    "unbilledProjects": [
+      "focusai-9983b", "proposals-static", "gsd-get-shit-done", "checkswingai",
+      "floresville-homepage", "floresville-home", "ads-home-manage", "ads-home-218e7",
+      "legion-442616", "vibrant-petal-442616-u2"
     ],
+    "projectCount": 13,
     "defaultRegion": "us-central1",
-    "verified": "2026-05-05",
-    "staleWarning": "Project list and API state were verified 2026-05-05 and have NOT been re-checked. `gcloud auth` was expired as of 2026-08-08. Re-verify before acting on cost or API claims.",
+    "firestore": {
+      "lawn-dart": "(default) FIRESTORE_NATIVE in nam5 - MULTI-REGION, priced above a regional database",
+      "slotd-app": "(default) FIRESTORE_NATIVE in us-central1"
+    },
+    "cloudRun": {
+      "lawn-dart": ["checks", "dz", "widget", "ssrlawndart", "ssrlawndartadmin"],
+      "slotd-app": "~30 services - the gen2 callables",
+      "note": "ssrlawndartadmin belongs to the retired lawndart-admin and ssrlawndart shows no serving revision. Both are deployed-but-unused surface."
+    },
+    "secrets": {
+      "lawn-dart": ["n8n-db-password", "n8n-encryption-key", "n8n-runner-token", "tailscale-auth-key",
+                    "resend-api-key", "spine-admin-url", "spine-database-url",
+                    "firebase-app-hosting-github-oauth-github-oauthtoken-3e4152"],
+      "slotd-app": ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_WEBHOOK_SECRET_CONNECT",
+                    "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_MESSAGING_SERVICE_SID",
+                    "TWILIO_PHONE_NUMBER", "SUPABASE_DB_URL", "PASS_SIGNING_KEY",
+                    "GOOGLE_GCP_API_KEY", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET",
+                    "SENDGRID_API_KEY", "META_CAPI_TOKEN", "META_PIXEL_ID",
+                    "APP_FROM_EMAIL", "DASHBOARD_URL"]
+    },
     "traps": [
-      "The active gcloud project defaults to slotd-app. ALWAYS pass --project explicitly.",
+      "The active gcloud project is slotd-app. ALWAYS pass --project explicitly - and note that even with --project, an API-not-enabled check resolves against the QUOTA project, so errors can name slotd-app while you are targeting lawn-dart. Set CLOUDSDK_CORE_PROJECT too.",
       "lawn-dart has App Engine, so its project ID is permanently reserved and it cannot be fully deleted.",
-      "lawn-dart has 88 enabled APIs but only ~5 show activity. Dormant Vertex/Discovery Engine/Retail/Vision are billing-surprise vectors - do not enable new APIs there casually.",
-      "9 user-managed SA JSON keys exist across both projects. Prefer workload identity or short-lived tokens over minting another.",
-      "Terraform has no ADC configured; authenticate with GOOGLE_OAUTH_ACCESS_TOKEN from `gcloud auth print-access-token` (~1h lifetime)."
+      "lawn-dart has 142 enabled APIs (up from 88 on 2026-05-05). Enabled-but-dormant billing-surprise vectors confirmed present: aiplatform, dialogflow, discoveryengine, retail, texttospeech, visionai, youtube, youtubeanalytics.",
+      "slotd-app has 85 enabled APIs.",
+      "11 user-managed SA JSON keys (7 on lawn-dart, 4 on slotd-app), up from 9 on 2026-05-05. Prefer workload identity or short-lived tokens over minting another.",
+      "client-mx-campaign IS billing-enabled on the open account. A 2026-05-05 note calling it dormant was wrong.",
+      "Terraform has no ADC configured; authenticate with GOOGLE_OAUTH_ACCESS_TOKEN from `gcloud auth print-access-token` (~1h lifetime).",
+      "gcloud tokens expire and cannot re-auth non-interactively. If a command fails on reauthentication, ask Joe to run `gcloud auth login`."
+    ],
+    "openQuestions": [
+      "lawn-dart holds secrets `spine-admin-url` and `spine-database-url`. Nothing in the tree explains what `spine` is or what database that URL points at. Identify or retire."
     ]
   },
 
@@ -96,7 +126,7 @@
       "No BigQuery billing export - per-SKU cost queries are NOT available from the CLI.",
       "No Security Command Center on either active project.",
       "No Recommender API enabled.",
-      "No Cloud SQL instance is known to exist. Verify before assuming one does.",
+      "NO CLOUD SQL ANYWHERE. sqladmin.googleapis.com is not even enabled on lawn-dart or slotd-app (verified 2026-08-08). platform.json names Cloud SQL as the store for a relational system of record - that is a target, not a resource. Standing one up means enabling the API, creating an instance, and accepting an always-on bill. Treat it as a project, not a config line.",
       "No HA failover on the homelab cluster - a node going down does not self-heal.",
       "NetBox's REST API is broken (Invalid v1 token). Use the Django ORM over SSH.",
       "The claude.ai MCP connector cannot reach n8n on naten (tailnet-only).",
