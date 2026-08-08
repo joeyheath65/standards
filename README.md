@@ -13,12 +13,17 @@ and none of them restate it:
 
 | Consumer | How | Catches drift |
 |---|---|---|
-| Renovate | `"extends": ["github>joeyheath65/standards"]` | continuously, as PRs |
+| Renovate | `"extends": ["github>joeyheath65/standards#v1"]` | continuously, as PRs |
 | CI | `uses: joeyheath65/standards/.github/workflows/baseline.yml@v1` | at PR — the hard gate |
 | SessionStart | the decision store reads this repo and reports your deltas | before you type |
 | PreToolUse | the same `bin/baseline-check` | as a session writes a bad dep |
 
 You update `baseline.json`, move the `v1` tag, and every repo rolls forward.
+
+**Pin the `#v1` in the Renovate preset.** A bare `github>joeyheath65/standards`
+resolves against the default branch, not the tag — so Renovate would follow
+`main` while CI follows `v1`, and the tag would stop being the single rollout
+lever. Both consumers must reference the same ref or the design leaks.
 
 ## floor vs target
 
