@@ -52,18 +52,36 @@ jobs:
           ref: ${{ inputs.standards-ref }}
           path: .standards
 
-      # One number, one place. A repo that hardcodes a Flutter version here
-      # is a repo that silently drifts from every other one.
+      # One number, one place — but honour the repo's dated exception, exactly
+      # like every other check. Building a repo against a Flutter it has not
+      # migrated to resolves dependencies differently and fails
+      # --enforce-lockfile on a lockfile that is perfectly valid for the
+      # version the repo actually uses. That is a false failure, and a CI that
+      # cries wolf gets muted.
+      #
+      # Order: explicit input > .baseline.json exception > baseline target.
       - name: Resolve the Flutter version
         id: ver
         run: |
           if [ -n "${{ inputs.flutter-version }}" ]; then
             v="${{ inputs.flutter-version }}"
-            echo "using override $v"
+            src="workflow input"
           else
-            v=$(python3 -c "import json;print(json.load(open('${{ github.workspace }}/.standards/baseline.json'))['runtimes']['flutter']['target'])")
-            echo "using baseline $v"
+            v=$(python3 - <<'PY'
+          import json, os, pathlib
+          std = pathlib.Path(os.environ["GITHUB_WORKSPACE"]) / ".standards" / "baseline.json"
+          target = json.load(open(std))["runtimes"]["flutter"]["target"]
+          cfg = pathlib.Path(".baseline.json")
+          if cfg.is_file():
+              exc = (json.loads(cfg.read_text()).get("exceptions") or {}).get("flutter")
+              if exc and exc.get("floor"):
+                  print(exc["floor"]); raise SystemExit
+          print(target)
+          PY
+          )
+            src="baseline (or its dated exception)"
           fi
+          echo "Flutter $v — from $src"
           echo "flutter=$v" >> "$GITHUB_OUTPUT"
 
       - uses: subosito/flutter-action@v2.23.0
