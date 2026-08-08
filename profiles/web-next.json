@@ -7,6 +7,7 @@
     "package-manager-pinned",
     "types-node-matches-runtime",
     "packages",
+    "lockfile-sync",
     "ci-node-pinned",
     "editorconfig",
     "gitignore"
@@ -20,5 +21,10 @@
     "typescript",
     "eslint"
   ],
-  "optionalPackages": ["vitest", "vite", "firebase-admin", "firebase-tools"]
+  "optionalPackages": [
+    "vitest",
+    "vite",
+    "firebase-admin",
+    "firebase-tools"
+  ]
 }

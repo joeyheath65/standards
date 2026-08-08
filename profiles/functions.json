@@ -5,8 +5,16 @@
     "engines-node",
     "types-node-matches-runtime",
     "packages",
+    "lockfile-sync",
     "gcf-runtime"
   ],
-  "packages": ["eslint", "firebase-admin", "firebase-functions"],
-  "optionalPackages": ["typescript", "vitest"]
+  "packages": [
+    "eslint",
+    "firebase-admin",
+    "firebase-functions"
+  ],
+  "optionalPackages": [
+    "typescript",
+    "vitest"
+  ]
 }

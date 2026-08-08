@@ -287,6 +287,37 @@ def check_runtime(rep, repo, base, exc, today, scope=""):
                 rep.add(OK, "package-manager-pinned", name, ver, spec["target"], scope=scope)
 
 
+def check_lockfile_sync(rep, repo, scope=""):
+    """package.json and the lockfile must agree.
+
+    Earned the hard way: a one-line @types/node bump in package.json without
+    regenerating the lock took down a Cloud Run deploy, because `npm ci` refuses
+    to install when they disagree. Nothing else in this file would have caught
+    it - every version was individually correct.
+    """
+    pkg = load_json(repo / "package.json")
+    lock = load_json(repo / "package-lock.json")
+    if not pkg or not lock:
+        return
+    root = (lock.get("packages") or {}).get("")
+    if not isinstance(root, dict):
+        return
+    drift = []
+    for section in ("dependencies", "devDependencies"):
+        declared = pkg.get(section) or {}
+        locked = root.get(section) or {}
+        for name, spec in declared.items():
+            if name in locked and locked[name] != spec:
+                drift.append(f"{name} {spec} vs lock {locked[name]}")
+            elif name not in locked:
+                drift.append(f"{name} {spec} absent from lock")
+    if drift:
+        rep.add(ERROR, "lockfile-sync", "package-lock.json", f"{len(drift)} mismatch(es)",
+                "in sync", "; ".join(drift[:3]) + " - `npm ci` will fail", scope)
+    else:
+        rep.add(OK, "lockfile-sync", "package-lock.json", "in sync", "in sync", scope=scope)
+
+
 def check_types_node(rep, repo, base, scope=""):
     pkg = load_json(repo / "package.json")
     if not pkg:
@@ -481,6 +512,7 @@ DISPATCH = {
                                      a["today"], a["scope"]),
     "types-node-matches-runtime": lambda a: check_types_node(a["rep"], a["repo"],
                                                              a["base"], a["scope"]),
+    "lockfile-sync": lambda a: check_lockfile_sync(a["rep"], a["repo"], a["scope"]),
     "ci-node-pinned": lambda a: check_ci_node(a["rep"], a["repo"], a["base"], a["scope"]),
     "gcf-runtime": lambda a: check_gcf_runtime(a["rep"], a["repo"], a["base"],
                                                a["today"], a["scope"]),

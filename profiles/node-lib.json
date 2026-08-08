@@ -7,10 +7,17 @@
     "package-manager-pinned",
     "types-node-matches-runtime",
     "packages",
+    "lockfile-sync",
     "ci-node-pinned",
     "editorconfig",
     "gitignore"
   ],
-  "packages": ["typescript", "eslint"],
-  "optionalPackages": ["vitest", "vite"]
+  "packages": [
+    "typescript",
+    "eslint"
+  ],
+  "optionalPackages": [
+    "vitest",
+    "vite"
+  ]
 }
