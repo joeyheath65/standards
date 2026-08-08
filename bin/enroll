@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Enroll a repo in the baseline, non-destructively.
+
+Writes `.baseline.json`, drops in `.editorconfig` and `.nvmrc` if absent, and
+converts every *current* floor violation into a dated exception so the repo
+goes green on day one. Nothing is upgraded and no existing file is overwritten.
+
+That is the point. Enrolment makes drift *visible and counted*; burning it down
+is separate, deliberate work with its own gate. A migration disguised as a
+config change is how you break nine builds in an afternoon.
+
+    enroll <repo> --profile web-next [--until 2026-11-30] [--apply]
+
+Defaults to a dry run. Pass --apply to write.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+STD = HERE.parent
+DEFAULT_GRACE_DAYS = 114  # ~ one quarter
+
+
+def check(repo: Path, today: str) -> dict:
+    out = subprocess.run(
+        [sys.executable, str(HERE / "baseline-check"), str(repo),
+         "--json", "--today", today],
+        capture_output=True, text=True,
+    )
+    if not out.stdout.strip():
+        print(out.stderr, file=sys.stderr)
+        raise SystemExit(2)
+    return json.loads(out.stdout)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("repo")
+    ap.add_argument("--profile", required=True,
+                    help="profile id, or 'none' for a repo whose work all lives in sub-packages")
+    ap.add_argument("--packages", default="",
+                    help="sub-package enrolment, e.g. functions=functions,dashboard=web-next")
+    ap.add_argument("--until", help="exception expiry (YYYY-MM-DD)")
+    ap.add_argument("--today", default=dt.date.today().isoformat())
+    ap.add_argument("--apply", action="store_true")
+    args = ap.parse_args()
+
+    repo = Path(args.repo).resolve()
+    today = dt.date.fromisoformat(args.today)
+    until = args.until or (today + dt.timedelta(days=DEFAULT_GRACE_DAYS)).isoformat()
+
+    root_profile = None if args.profile == "none" else args.profile
+    if root_profile and not (STD / "profiles" / f"{root_profile}.json").is_file():
+        print(f"enroll: unknown profile '{root_profile}'", file=sys.stderr)
+        return 2
+
+    cfg: dict = {}
+    if root_profile:
+        cfg["profile"] = root_profile
+    if args.packages:
+        cfg["packages"] = dict(
+            p.split("=", 1) for p in args.packages.split(",") if "=" in p)
+    cfg["exceptions"] = {}
+
+    # Seed a config so the checker can run, then convert what it finds.
+    target = repo / ".baseline.json"
+    existing = target.read_text() if target.is_file() else None
+    target.write_text(json.dumps(cfg, indent=2) + "\n")
+    try:
+        result = check(repo, args.today)
+    finally:
+        if not args.apply:
+            if existing is None:
+                target.unlink(missing_ok=True)
+            else:
+                target.write_text(existing)
+
+    exceptions, structural = {}, []
+    for row in result["rows"]:
+        if row["level"] != "error":
+            continue
+        # Missing files and mismatched types are fixed, not excepted - an
+        # exception for "you have no .nvmrc" would just hide the work forever.
+        if row["check"] in {"nvmrc", "engines-node", "types-node-matches-runtime",
+                            "ci-node-pinned", "gcf-runtime", "renovate-configured"}:
+            structural.append(row)
+            continue
+        exceptions[row["subject"]] = {
+            "floor": row["found"],
+            "until": until,
+            "reason": f"present at enrolment {args.today}; {row['detail']}",
+        }
+    cfg["exceptions"] = exceptions
+
+    print(f"{repo.name}: profile={args.profile}")
+    print(f"  {len(exceptions)} exception(s) -> expire {until}")
+    for k, v in exceptions.items():
+        print(f"    {k:24} pinned at {v['floor']}")
+    if structural:
+        print(f"  {len(structural)} item(s) must be FIXED, not excepted:")
+        for row in structural:
+            print(f"    {row['check']:28} {row['subject']} = {row['found']}"
+                  f"  -> {row['expected']}  ({row['detail']})")
+    print(f"  {result['warnings']} warning(s) (below target - Renovate's job)")
+
+    if not args.apply:
+        print("\ndry run. re-run with --apply to write .baseline.json")
+        return 0
+
+    target.write_text(json.dumps(cfg, indent=2) + "\n")
+    ec = repo / ".editorconfig"
+    if not ec.is_file():
+        ec.write_text((STD / "templates" / "editorconfig").read_text())
+        print("  wrote .editorconfig")
+    print(f"  wrote {target.relative_to(repo.parent)}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

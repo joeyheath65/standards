@@ -1,0 +1,66 @@
+name: node-ci
+
+# Reusable. Call it from any Node repo:
+#
+#   jobs:
+#     ci:
+#       uses: joeyheath65/standards/.github/workflows/node-ci.yml@v1
+#       with:
+#         package-manager: pnpm
+#
+# Node version comes from the repo's .nvmrc - never hardcoded here, so the
+# pin lives in exactly one place per repo and baseline-check can police it.
+
+on:
+  workflow_call:
+    inputs:
+      package-manager:
+        description: npm or pnpm
+        type: string
+        default: npm
+      working-directory:
+        type: string
+        default: .
+      test-command:
+        type: string
+        default: ''
+      skip-typecheck:
+        type: boolean
+        default: false
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Enable pnpm
+        if: inputs.package-manager == 'pnpm'
+        uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: ${{ inputs.package-manager }}
+          cache-dependency-path: ${{ inputs.working-directory }}/${{ inputs.package-manager == 'pnpm' && 'pnpm-lock.yaml' || 'package-lock.json' }}
+
+      - name: Install
+        run: ${{ inputs.package-manager == 'pnpm' && 'pnpm install --frozen-lockfile' || 'npm ci' }}
+
+      # `--if-present` throughout: not every repo has every script, and a
+      # missing lint script should not read as a failing lint.
+      - name: Lint
+        run: ${{ inputs.package-manager }} run lint --if-present
+
+      - name: Typecheck
+        if: ${{ !inputs.skip-typecheck }}
+        run: ${{ inputs.package-manager }} run typecheck --if-present
+
+      - name: Test
+        run: ${{ inputs.test-command || format('{0} run test --if-present', inputs.package-manager) }}
+
+      - name: Build
+        run: ${{ inputs.package-manager }} run build --if-present

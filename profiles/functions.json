@@ -1,0 +1,12 @@
+{
+  "id": "functions",
+  "description": "Firebase Cloud Functions package. Adds the GCF runtime check, which carries hard decommission dates. TypeScript is optional - plenty of functions packages are plain JS.",
+  "checks": [
+    "engines-node",
+    "types-node-matches-runtime",
+    "packages",
+    "gcf-runtime"
+  ],
+  "packages": ["eslint", "firebase-admin", "firebase-functions"],
+  "optionalPackages": ["typescript", "vitest"]
+}

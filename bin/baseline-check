@@ -1,0 +1,577 @@
+#!/usr/bin/env python3
+"""Check a repo against the toolchain baseline.
+
+One implementation, three callers: your terminal, CI (via the reusable
+workflow), and the PreToolUse hook. They cannot disagree because there is
+nothing to keep in sync.
+
+Contract:
+  exit 0  clean, or only warnings (below target, or a live exception)
+  exit 1  violation (below floor with no live exception, or an EXPIRED one)
+  exit 2  the check itself could not run (bad config, missing baseline)
+
+A repo opts in with a .baseline.json at its root:
+
+    {
+      "profile": "web-next",
+      "packages": { "functions": "functions", "dashboard": "web-next" },
+      "exceptions": {
+        "react": { "floor": "18.3.1", "until": "2026-11-30", "reason": "..." }
+      }
+    }
+
+Exceptions are the whole point: an honest, dated, countable record of debt
+beats a red build nobody can act on today. They expire, and an expired
+exception fails harder than the original violation.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+ERROR, WARN, OK = "error", "warn", "ok"
+EXPIRY_HORIZON_DAYS = 180
+
+
+# ---------------------------------------------------------------- versions
+
+def parse_spec(raw: str | None) -> tuple[tuple[int, int, int], int] | None:
+    """Lowest version a range admits, plus how many components were stated.
+
+    Precision matters. `.nvmrc` of "22" is a *line* pin meaning "newest 22.x",
+    not the literal 22.0.0 - comparing it against a patch-level floor would
+    fail every correctly-configured repo we have.
+    """
+    if not raw:
+        return None
+    text = str(raw).strip()
+    if not text or text in {"*", "latest", "x"}:
+        return None
+    # A union can resolve to any branch, so its guarantee is the lowest.
+    if "||" in text:
+        alts = [s for s in (parse_spec(p) for p in text.split("||")) if s]
+        return min(alts, key=lambda s: s[0]) if alts else None
+    m = re.search(r"(\d+)(?:\.(\d+|[xX*]))?(?:\.(\d+|[xX*]))?", text)
+    if not m:
+        return None
+    parts, precision = [], 0
+    for g in m.groups():
+        if g in (None, "x", "X", "*"):
+            parts.append(0)
+        else:
+            parts.append(int(g))
+            precision += 1
+    return ((parts[0], parts[1], parts[2]), precision)
+
+
+def parse_version(raw: str | None) -> tuple[int, int, int] | None:
+    s = parse_spec(raw)
+    return s[0] if s else None
+
+
+def below(found_raw, floor_raw) -> bool:
+    """Is `found` below `floor`, compared only as precisely as both were stated?"""
+    f, fl = parse_spec(found_raw), parse_spec(floor_raw)
+    if not (f and fl):
+        return False
+    n = min(f[1], fl[1]) or 1
+    return f[0][:n] < fl[0][:n]
+
+
+def fmt(v: tuple[int, int, int] | None) -> str:
+    return ".".join(str(x) for x in v) if v else "?"
+
+
+def resolved_version(repo: Path, name: str) -> str | None:
+    """What the lockfile actually installs. A loose range is a separate finding
+    from a genuinely old dependency, and only the lockfile can tell them apart."""
+    lock = repo / "package-lock.json"
+    if lock.is_file():
+        data = load_json(lock) or {}
+        entry = (data.get("packages") or {}).get(f"node_modules/{name}")
+        if isinstance(entry, dict) and entry.get("version"):
+            return entry["version"]
+        dep = (data.get("dependencies") or {}).get(name)
+        if isinstance(dep, dict) and dep.get("version"):
+            return dep["version"]
+    for pl in (repo / "pnpm-lock.yaml", repo.parent / "pnpm-lock.yaml"):
+        if pl.is_file():
+            text = pl.read_text(errors="replace")
+            hits = re.findall(rf"^\s*/?{re.escape(name)}@(\d[\w.\-+]*)", text, re.M)
+            if hits:
+                return sorted(hits, key=lambda h: parse_version(h) or (0, 0, 0))[-1]
+    return None
+
+
+# ------------------------------------------------------------------ result
+
+class Report:
+    def __init__(self) -> None:
+        self.rows: list[dict] = []
+
+    def add(self, level, check, subject, found, expected, detail="", scope=""):
+        self.rows.append({
+            "level": level, "check": check, "subject": subject,
+            "found": found, "expected": expected, "detail": detail,
+            "scope": scope,
+        })
+
+    @property
+    def errors(self):
+        return [r for r in self.rows if r["level"] == ERROR]
+
+    @property
+    def warns(self):
+        return [r for r in self.rows if r["level"] == WARN]
+
+
+# ------------------------------------------------------------------ config
+
+def load_json(path: Path):
+    try:
+        return json.loads(path.read_text())
+    except FileNotFoundError:
+        return None
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"baseline-check: cannot read {path}: {exc}", file=sys.stderr)
+        raise SystemExit(2)
+
+
+def find_standards(explicit: str | None) -> Path:
+    for cand in (
+        explicit,
+        os.environ.get("LD_STANDARDS_DIR"),
+        str(Path(__file__).resolve().parent.parent),
+        str(Path.home() / "dev/work/lawndart/platform/standards"),
+    ):
+        if cand and (Path(cand) / "baseline.json").is_file():
+            return Path(cand)
+    print("baseline-check: no baseline.json found. Set LD_STANDARDS_DIR.", file=sys.stderr)
+    raise SystemExit(2)
+
+
+def deps_of(pkg: dict) -> dict:
+    return {**(pkg.get("dependencies") or {}),
+            **(pkg.get("devDependencies") or {})}
+
+
+# ------------------------------------------------------------------ checks
+
+def check_packages(rep, repo, prof, base, exc, today, scope=""):
+    pkg = load_json(repo / "package.json")
+    if pkg is None:
+        rep.add(WARN, "packages", "package.json", "missing", "present", scope=scope)
+        return
+    deps = deps_of(pkg)
+    wanted = list(prof.get("packages", [])) + [
+        p for p in prof.get("optionalPackages", []) if p in deps
+    ]
+    for name in wanted:
+        spec = base["packages"].get(name)
+        if not spec:
+            continue
+        if name not in deps:
+            if name in prof.get("packages", []):
+                rep.add(WARN, "packages", name, "absent", f">={spec['floor']}",
+                        "declared by profile but not installed", scope)
+            continue
+        declared = deps[name]
+        if parse_spec(declared) is None:
+            rep.add(WARN, "packages", name, declared, spec["target"],
+                    "unpinned range", scope)
+            continue
+        installed = resolved_version(repo, name)
+        effective = installed or declared
+
+        if below(effective, spec["floor"]):
+            judge_exception(rep, "packages", name, effective, spec["floor"],
+                            exc, today, scope)
+        elif installed and below(declared, spec["floor"]):
+            # Installs fine today, but the range would happily resolve below
+            # floor on a fresh install. That ambiguity is the actual defect.
+            rep.add(WARN, "packages", name, declared, f">={spec['floor']}",
+                    f"range admits below floor (lock has {installed})", scope)
+        elif below(effective, spec["target"]):
+            rep.add(WARN, "packages", name, effective, spec["target"],
+                    "below target", scope)
+        else:
+            rep.add(OK, "packages", name, effective, spec["target"], scope=scope)
+
+
+def judge_exception(rep, check, subject, found, expected, exc, today, scope=""):
+    """A violation is downgraded only by a live, dated exception."""
+    e = exc.get(subject)
+    if not e:
+        rep.add(ERROR, check, subject, found, f">={expected}",
+                "below floor, no exception", scope)
+        return
+    until = e.get("until")
+    try:
+        expiry = dt.date.fromisoformat(until)
+    except (TypeError, ValueError):
+        rep.add(ERROR, check, subject, found, f">={expected}",
+                "exception has no valid 'until' date", scope)
+        return
+    if expiry < today:
+        rep.add(ERROR, check, subject, found, f">={expected}",
+                f"exception EXPIRED {until}", scope)
+        return
+    days = (expiry - today).days
+    urgency = "expires in %d days" % days if days <= 30 else "until %s" % until
+    rep.add(WARN, check, subject, found, f">={expected}",
+            f"exception: {urgency}", scope)
+
+
+def node_major(repo, pkg) -> int | None:
+    nvmrc = repo / ".nvmrc"
+    if nvmrc.is_file():
+        v = parse_version(nvmrc.read_text())
+        if v:
+            return v[0]
+    v = parse_version(((pkg or {}).get("engines") or {}).get("node"))
+    return v[0] if v else None
+
+
+def check_runtime(rep, repo, base, exc, today, scope=""):
+    node = base["runtimes"]["node"]
+    floor, target = parse_version(node["floor"]), parse_version(node["target"])
+    pkg = load_json(repo / "package.json") or {}
+
+    nvmrc = repo / ".nvmrc"
+    if not nvmrc.is_file():
+        rep.add(ERROR, "nvmrc", ".nvmrc", "missing", node["target"],
+                "no pinned Node version", scope)
+    else:
+        raw = nvmrc.read_text().strip()
+        if below(raw, node["floor"]):
+            judge_exception(rep, "nvmrc", "node", raw, node["floor"],
+                            exc, today, scope)
+        elif below(raw, node["target"]):
+            rep.add(WARN, "nvmrc", "node", raw, node["target"],
+                    "behind Active LTS", scope)
+        else:
+            rep.add(OK, "nvmrc", "node", raw, node["target"], scope=scope)
+
+    eng = (pkg.get("engines") or {}).get("node")
+    if not eng:
+        rep.add(ERROR, "engines-node", "engines.node", "missing",
+                node["target"], "package.json declares no Node range", scope)
+    elif below(eng, node["floor"]):
+        rep.add(ERROR, "engines-node", "engines.node", eng, node["floor"],
+                "range admits a version below floor", scope)
+    elif below(eng, node["target"]):
+        rep.add(WARN, "engines-node", "engines.node", eng, node["target"],
+                "behind Active LTS", scope)
+    else:
+        rep.add(OK, "engines-node", "engines.node", eng, node["target"], scope=scope)
+
+    pm = pkg.get("packageManager")
+    if not pm:
+        rep.add(WARN, "package-manager-pinned", "packageManager", "missing",
+                "npm@%s" % base["packageManagers"]["npm"]["target"],
+                "unpinned package manager lets two machines resolve differently",
+                scope)
+    else:
+        name, _, ver = pm.partition("@")
+        spec = base["packageManagers"].get(name)
+        if spec:
+            if below(ver, spec["floor"]):
+                judge_exception(rep, "package-manager-pinned", name, ver,
+                                spec["floor"], exc, today, scope)
+            else:
+                rep.add(OK, "package-manager-pinned", name, ver, spec["target"], scope=scope)
+
+
+def check_types_node(rep, repo, base, scope=""):
+    pkg = load_json(repo / "package.json")
+    if not pkg:
+        return
+    dep = deps_of(pkg).get("@types/node")
+    if not dep:
+        return
+    major = node_major(repo, pkg)
+    found = parse_version(dep)
+    if not (found and major):
+        return
+    if found[0] != major:
+        rep.add(ERROR, "types-node-matches-runtime", "@types/node", dep,
+                f"^{major}", f"types target Node {found[0]}, runtime is {major}",
+                scope)
+    else:
+        rep.add(OK, "types-node-matches-runtime", "@types/node", dep, f"^{major}", scope=scope)
+
+
+def check_ci_node(rep, repo, base, scope=""):
+    wf = repo / ".github/workflows"
+    if not wf.is_dir():
+        rep.add(WARN, "ci-node-pinned", "workflows", "none", "present",
+                "repo has no CI", scope)
+        return
+    floor = parse_version(base["runtimes"]["node"]["floor"])
+    target = parse_version(base["runtimes"]["node"]["target"])
+    seen = False
+    for f in sorted(wf.glob("*.y*ml")):
+        text = f.read_text(errors="replace")
+        if "node-version-file" in text:
+            rep.add(OK, "ci-node-pinned", f.name, "node-version-file", ".nvmrc", scope=scope)
+            seen = True
+            continue
+        for m in re.finditer(r"node-version:\s*['\"]?([\d.xX*]+)", text):
+            seen = True
+            if below(m.group(1), base["runtimes"]["node"]["floor"]):
+                rep.add(ERROR, "ci-node-pinned", f.name, m.group(1),
+                        base["runtimes"]["node"]["floor"],
+                        "CI runs a Node below floor", scope)
+            elif below(m.group(1), base["runtimes"]["node"]["target"]):
+                rep.add(WARN, "ci-node-pinned", f.name, m.group(1),
+                        base["runtimes"]["node"]["target"],
+                        "prefer node-version-file: .nvmrc", scope)
+            else:
+                rep.add(OK, "ci-node-pinned", f.name, m.group(1),
+                        base["runtimes"]["node"]["target"], scope=scope)
+    if not seen:
+        rep.add(WARN, "ci-node-pinned", "workflows", "unpinned", ".nvmrc",
+                "no workflow pins a Node version", scope)
+
+
+def check_gcf_runtime(rep, repo, base, today, scope=""):
+    spec = base["platform"]["gcfRuntime"]
+    found = None
+    for cand in (repo / "firebase.json", repo.parent / "firebase.json"):
+        data = load_json(cand)
+        if not data:
+            continue
+        fns = data.get("functions")
+        for entry in (fns if isinstance(fns, list) else [fns] if fns else []):
+            if isinstance(entry, dict) and entry.get("runtime"):
+                found = entry["runtime"]
+        if found:
+            break
+    if not found:
+        pkg = load_json(repo / "package.json") or {}
+        eng = (pkg.get("engines") or {}).get("node")
+        found = f"nodejs{parse_version(eng)[0]}" if parse_version(eng) else None
+    if not found:
+        rep.add(WARN, "gcf-runtime", "runtime", "undeclared", spec["target"], scope=scope)
+        return
+
+    decom = spec["decommission"].get(found)
+    if decom:
+        try:
+            when = dt.date.fromisoformat(decom)
+            days = (when - today).days
+            if days < 0:
+                rep.add(ERROR, "gcf-runtime", found, found, spec["target"],
+                        f"DECOMMISSIONED {decom}", scope)
+                return
+            if days <= EXPIRY_HORIZON_DAYS:
+                rep.add(ERROR, "gcf-runtime", found, found, spec["target"],
+                        f"decommissioned {decom} - {days} days", scope)
+                return
+        except ValueError:
+            pass
+    if below(found, spec["floor"]):
+        rep.add(ERROR, "gcf-runtime", found, found, spec["floor"], "below floor", scope)
+    else:
+        rep.add(OK, "gcf-runtime", found, found, spec["target"], scope=scope)
+
+
+def check_python(rep, repo, base, scope=""):
+    spec = base["runtimes"]["python"]
+    floor, target = parse_version(spec["floor"]), parse_version(spec["target"])
+    pv = repo / ".python-version"
+    if pv.is_file():
+        raw = pv.read_text().strip()
+        if below(raw, spec["floor"]):
+            rep.add(ERROR, "python-version", ".python-version", raw,
+                    spec["floor"], "below floor", scope)
+        elif below(raw, spec["target"]):
+            rep.add(WARN, "python-version", ".python-version", raw,
+                    spec["target"], "below target", scope)
+        else:
+            rep.add(OK, "python-version", ".python-version", raw, spec["target"], scope=scope)
+    else:
+        rep.add(WARN, "python-version", ".python-version", "missing",
+                spec["target"], "no pinned Python", scope)
+
+    for toml in list(repo.glob("pyproject.toml"))[:1]:
+        m = re.search(r'requires-python\s*=\s*["\']([^"\']+)', toml.read_text(errors="replace"))
+        if m:
+            if below(m.group(1), spec["floor"]):
+                rep.add(ERROR, "requires-python", "pyproject.toml", m.group(1),
+                        f">={spec['floor']}", "admits an EOL Python", scope)
+            else:
+                rep.add(OK, "requires-python", "pyproject.toml", m.group(1),
+                        f">={spec['floor']}", scope=scope)
+
+
+def check_flutter(rep, repo, base, scope=""):
+    spec = base["runtimes"]["dart"]
+    pub = repo / "pubspec.yaml"
+    if not pub.is_file():
+        rep.add(WARN, "dart-sdk-constraint", "pubspec.yaml", "missing", "present", scope=scope)
+        return
+    m = re.search(r"sdk:\s*['\"]?\^?([\d.]+)", pub.read_text(errors="replace"))
+    if not m:
+        rep.add(WARN, "dart-sdk-constraint", "sdk", "undeclared", spec["target"], scope=scope)
+        return
+    raw = m.group(1)
+    if below(raw, spec["floor"]):
+        rep.add(ERROR, "dart-sdk-constraint", "dart", raw, spec["floor"],
+                "below floor", scope)
+    elif below(raw, spec["target"]):
+        rep.add(WARN, "dart-sdk-constraint", "dart", raw, spec["target"],
+                "below target", scope)
+    else:
+        rep.add(OK, "dart-sdk-constraint", "dart", raw, spec["target"], scope=scope)
+
+
+def check_files(rep, repo, prof, scope=""):
+    for check, name in (("editorconfig", ".editorconfig"), ("gitignore", ".gitignore")):
+        if check in prof.get("checks", []):
+            level = OK if (repo / name).is_file() else WARN
+            rep.add(level, check, name,
+                    "present" if level == OK else "missing", "present", scope=scope)
+
+
+def check_no_latest(rep, repo, scope=""):
+    hits = []
+    for pat in ("**/Dockerfile*", "**/docker-compose*.y*ml", "**/versions.env"):
+        for f in repo.glob(pat):
+            if ".git" in f.parts or "node_modules" in f.parts:
+                continue
+            for i, line in enumerate(f.read_text(errors="replace").splitlines(), 1):
+                if re.search(r":latest\b", line) and not line.lstrip().startswith("#"):
+                    hits.append(f"{f.relative_to(repo)}:{i}")
+    if hits:
+        rep.add(ERROR, "no-latest-tags", "image tags", ", ".join(hits[:3]),
+                "pinned", f"{len(hits)} unpinned tag(s)", scope)
+    else:
+        rep.add(OK, "no-latest-tags", "image tags", "all pinned", "pinned", scope=scope)
+
+
+def check_renovate(rep, repo, scope=""):
+    present = any((repo / n).is_file() for n in
+                  ("renovate.json", "renovate.json5", ".github/renovate.json"))
+    if not present:
+        rep.add(ERROR, "renovate-configured", "renovate.json", "missing",
+                "extends lawndart standards", "no automated dependency updates", scope)
+        return
+    for n in ("renovate.json", "renovate.json5", ".github/renovate.json"):
+        f = repo / n
+        if f.is_file():
+            shared = "standards" in f.read_text(errors="replace")
+            rep.add(OK if shared else WARN, "renovate-configured", n,
+                    "shared preset" if shared else "local config",
+                    "extends the shared preset", scope=scope)
+            return
+
+
+# -------------------------------------------------------------------- main
+
+DISPATCH = {
+    "packages": lambda a: check_packages(a["rep"], a["repo"], a["prof"], a["base"],
+                                         a["exc"], a["today"], a["scope"]),
+    "nvmrc": lambda a: check_runtime(a["rep"], a["repo"], a["base"], a["exc"],
+                                     a["today"], a["scope"]),
+    "types-node-matches-runtime": lambda a: check_types_node(a["rep"], a["repo"],
+                                                             a["base"], a["scope"]),
+    "ci-node-pinned": lambda a: check_ci_node(a["rep"], a["repo"], a["base"], a["scope"]),
+    "gcf-runtime": lambda a: check_gcf_runtime(a["rep"], a["repo"], a["base"],
+                                               a["today"], a["scope"]),
+    "python-version": lambda a: check_python(a["rep"], a["repo"], a["base"], a["scope"]),
+    "dart-sdk-constraint": lambda a: check_flutter(a["rep"], a["repo"], a["base"], a["scope"]),
+    "no-latest-tags": lambda a: check_no_latest(a["rep"], a["repo"], a["scope"]),
+    "renovate-configured": lambda a: check_renovate(a["rep"], a["repo"], a["scope"]),
+}
+# These are folded into the runtime/file checks above rather than dispatched.
+ABSORBED = {"engines-node", "package-manager-pinned", "requires-python",
+            "ci-python-pinned", "flutter-version", "editorconfig", "gitignore"}
+
+
+def run_profile(rep, repo, prof, base, exc, today, scope=""):
+    done = set()
+    for check in prof.get("checks", []):
+        if check in ABSORBED or check in done:
+            continue
+        fn = DISPATCH.get(check)
+        if fn:
+            done.add(check)
+            fn({"rep": rep, "repo": repo, "prof": prof, "base": base,
+                "exc": exc, "today": today, "scope": scope})
+    check_files(rep, repo, prof, scope)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Check a repo against the toolchain baseline.")
+    ap.add_argument("repo", nargs="?", default=".")
+    ap.add_argument("--standards", help="path to the standards repo")
+    ap.add_argument("--json", action="store_true", help="machine-readable output")
+    ap.add_argument("--quiet", action="store_true", help="only errors and warnings")
+    ap.add_argument("--today", help="override today (YYYY-MM-DD), for tests")
+    args = ap.parse_args()
+
+    repo = Path(args.repo).resolve()
+    std = find_standards(args.standards)
+    base = load_json(std / "baseline.json")
+    today = dt.date.fromisoformat(args.today) if args.today else dt.date.today()
+
+    cfg = load_json(repo / ".baseline.json")
+    if cfg is None:
+        print(f"baseline-check: {repo} has no .baseline.json - not enrolled.",
+              file=sys.stderr)
+        return 2
+
+    rep = Report()
+    exc = cfg.get("exceptions") or {}
+
+    prof_name = cfg.get("profile")
+    if prof_name:
+        prof = load_json(std / "profiles" / f"{prof_name}.json")
+        if prof is None:
+            print(f"baseline-check: unknown profile '{prof_name}'", file=sys.stderr)
+            return 2
+        run_profile(rep, repo, prof, base, exc, today)
+
+    for sub, sub_prof_name in (cfg.get("packages") or {}).items():
+        sub_prof = load_json(std / "profiles" / f"{sub_prof_name}.json")
+        if sub_prof is None:
+            print(f"baseline-check: unknown profile '{sub_prof_name}' for {sub}",
+                  file=sys.stderr)
+            return 2
+        sub_exc = {**exc, **((cfg.get("packageExceptions") or {}).get(sub) or {})}
+        run_profile(rep, repo / sub, sub_prof, base, sub_exc, today, scope=sub)
+
+    if args.json:
+        print(json.dumps({
+            "repo": str(repo), "baseline": base["updated"],
+            "errors": len(rep.errors), "warnings": len(rep.warns),
+            "rows": rep.rows,
+        }, indent=2))
+        return 1 if rep.errors else 0
+
+    label = {ERROR: "FAIL", WARN: "warn", OK: "ok"}
+    width = max((len(r["subject"]) for r in rep.rows), default=10) + 2
+    for r in rep.rows:
+        if args.quiet and r["level"] == OK:
+            continue
+        scope = f"[{r['scope']}] " if r["scope"] else ""
+        line = f"  {label[r['level']]:5} {scope}{r['subject']:<{width}} {r['found']}"
+        if r["level"] != OK:
+            line += f"  -> want {r['expected']}"
+            if r["detail"]:
+                line += f"  ({r['detail']})"
+        print(line)
+
+    print(f"\n{repo.name}: {len(rep.errors)} violation(s), {len(rep.warns)} warning(s) "
+          f"against baseline {base['updated']}")
+    return 1 if rep.errors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

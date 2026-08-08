@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "updated": "2026-08-08",
+  "decision": "ld-2026-08-08-toolchain-baseline",
+  "sources": {
+    "node": "https://nodejs.org/dist/index.json + nodejs/Release schedule.json",
+    "npm": "https://registry.npmjs.org/<pkg>/latest",
+    "python": "https://endoflife.date/api/python.json",
+    "gcfRuntime": "firebase-tools src/deploy/functions/runtimes/supported/types.ts",
+    "flutter": "https://storage.googleapis.com/flutter_infra_release/releases/releases_macos.json"
+  },
+  "runtimes": {
+    "node": {
+      "floor": "22.22.2",
+      "target": "24.19.0",
+      "line": "24",
+      "codename": "Krypton",
+      "channel": "active-lts",
+      "activeLtsUntil": "2026-10-20",
+      "note": "22 (Jod) entered maintenance 2025-10-21, EOL 2027-04-30. Floor is 22.22.2 because npm 12 requires it. Node 25 is NOT viable - npm 12 engines exclude it. Node 26 becomes LTS 2026-10-28; plan the next hop then."
+    },
+    "python": {
+      "floor": "3.12",
+      "target": "3.14.7",
+      "eol": "2030-10-31"
+    },
+    "flutter": {
+      "floor": "3.41.6",
+      "target": "3.44.9"
+    },
+    "dart": {
+      "floor": "3.11.4",
+      "target": "3.12.2"
+    }
+  },
+  "packageManagers": {
+    "npm": {
+      "floor": "10.0.0",
+      "target": "12.0.2",
+      "engines": "^22.22.2 || ^24.15.0 || >=26.0.0"
+    },
+    "pnpm": {
+      "floor": "9.15.2",
+      "target": "11.20.0",
+      "engines": ">=22.13"
+    }
+  },
+  "packages": {
+    "next": {
+      "floor": "15.0.0",
+      "target": "16.3.0"
+    },
+    "react": {
+      "floor": "19.0.0",
+      "target": "19.2.8"
+    },
+    "react-dom": {
+      "floor": "19.0.0",
+      "target": "19.2.8"
+    },
+    "tailwindcss": {
+      "floor": "3.4.19",
+      "target": "4.3.3",
+      "note": "3.4.19 is the published v3-lts tag. 3 -> 4 is a CSS-first migration, not a bump: config moves into CSS and PostCSS moves to @tailwindcss/postcss."
+    },
+    "@tailwindcss/postcss": {
+      "floor": "4.0.0",
+      "target": "4.3.3",
+      "onlyWhen": "tailwindcss>=4"
+    },
+    "typescript": {
+      "floor": "5.9.0",
+      "target": "6.0.3",
+      "note": "Floor 5.9 is the last 5.x. Target 6.0.3 (2026-04-16). TS 7 is held - see `held`."
+    },
+    "eslint": {
+      "floor": "9.0.0",
+      "target": "10.8.1",
+      "note": "9.39.5 is the published maintenance tag. 8 -> 9 is the flat-config break."
+    },
+    "vitest": {
+      "floor": "3.0.0",
+      "target": "4.1.10"
+    },
+    "vite": {
+      "floor": "6.0.0",
+      "target": "8.2.1"
+    },
+    "firebase-admin": {
+      "floor": "13.0.0",
+      "target": "14.2.0"
+    },
+    "firebase-functions": {
+      "floor": "6.0.0",
+      "target": "7.3.2"
+    },
+    "firebase-tools": {
+      "floor": "14.0.0",
+      "target": "15.26.0"
+    },
+    "@types/node": {
+      "floor": "22.0.0",
+      "target": "24.0.0",
+      "rule": "major must equal the Node runtime major"
+    }
+  },
+  "held": {
+    "typescript": {
+      "holdBelow": "7.0.0",
+      "reason": "7.0.2 shipped 2026-07-08 and is the native compiler rewrite (2.5MB unpacked vs 23.6MB for 5.9.3). One month of field time is not enough to move nine repos onto a new compiler.",
+      "review": "2026-11-01"
+    },
+    "node": {
+      "holdBelow": "26.0.0",
+      "reason": "26 is Current, not LTS, until 2026-10-28.",
+      "review": "2026-11-01"
+    }
+  },
+  "platform": {
+    "gcfRuntime": {
+      "floor": "nodejs22",
+      "target": "nodejs24",
+      "decommission": {
+        "nodejs18": "2025-10-30",
+        "nodejs20": "2026-10-30",
+        "nodejs22": "2028-10-31",
+        "nodejs24": "2028-10-31"
+      }
+    }
+  },
+  "git": {
+    "defaultBranch": "main",
+    "protectMain": true,
+    "commitConvention": "conventional",
+    "requireLinearHistory": false,
+    "deleteBranchOnMerge": true
+  }
+}

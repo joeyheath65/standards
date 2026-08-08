@@ -1,0 +1,11 @@
+{
+  "id": "infra",
+  "description": "Terraform + Docker Compose infrastructure repo. No application runtime. Modelled on ops/gcp-autobot.",
+  "checks": [
+    "no-latest-tags",
+    "renovate-configured",
+    "editorconfig",
+    "gitignore"
+  ],
+  "packages": []
+}

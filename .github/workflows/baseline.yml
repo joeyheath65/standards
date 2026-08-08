@@ -1,0 +1,80 @@
+name: baseline
+
+# Reusable. Call it from any repo:
+#
+#   jobs:
+#     baseline:
+#       uses: joeyheath65/standards/.github/workflows/baseline.yml@v1
+#
+# Checks the calling repo against the shared toolchain baseline. Fails on a
+# floor violation with no live exception; passes with annotations otherwise.
+
+on:
+  workflow_call:
+    inputs:
+      standards-ref:
+        description: Tag/branch of the standards repo to check against.
+        type: string
+        default: v1
+      working-directory:
+        type: string
+        default: .
+    outputs:
+      violations:
+        value: ${{ jobs.check.outputs.violations }}
+      warnings:
+        value: ${{ jobs.check.outputs.warnings }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      violations: ${{ steps.run.outputs.violations }}
+      warnings: ${{ steps.run.outputs.warnings }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Fetch the standards
+        uses: actions/checkout@v5
+        with:
+          repository: joeyheath65/standards
+          ref: ${{ inputs.standards-ref }}
+          path: .standards
+
+      # Deliberately the runner's stock Python: the checker is stdlib-only, and
+      # a baseline check that needs a toolchain to tell you your toolchain is
+      # wrong is a circular dependency.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: baseline-check
+        id: run
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          LD_STANDARDS_DIR: ${{ github.workspace }}/.standards
+        run: |
+          set +e
+          python3 "$LD_STANDARDS_DIR/bin/baseline-check" . --json > result.json
+          code=$?
+          set -e
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os
+          r = json.load(open("result.json"))
+          print(f"## Toolchain baseline `{r['baseline']}`\n")
+          print(f"**{r['errors']} violation(s), {r['warnings']} warning(s)**\n")
+          rows = [x for x in r["rows"] if x["level"] != "ok"]
+          if rows:
+              print("| | check | subject | found | want | detail |")
+              print("|---|---|---|---|---|---|")
+              for x in sorted(rows, key=lambda y: y["level"]):
+                  mark = "FAIL" if x["level"] == "error" else "warn"
+                  scope = f"`{x['scope']}` " if x["scope"] else ""
+                  print(f"| {mark} | {x['check']} | {scope}`{x['subject']}` "
+                        f"| `{x['found']}` | `{x['expected']}` | {x['detail']} |")
+          else:
+              print("Clean.")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"violations={r['errors']}\nwarnings={r['warnings']}\n")
+          PY
+          exit $code

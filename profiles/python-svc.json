@@ -1,0 +1,12 @@
+{
+  "id": "python-svc",
+  "description": "Python service, script collection, or tool.",
+  "checks": [
+    "python-version",
+    "requires-python",
+    "ci-python-pinned",
+    "editorconfig",
+    "gitignore"
+  ],
+  "packages": []
+}

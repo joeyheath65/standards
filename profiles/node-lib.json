@@ -1,0 +1,16 @@
+{
+  "id": "node-lib",
+  "description": "TypeScript library or pnpm/turbo monorepo package. No framework assumed.",
+  "checks": [
+    "nvmrc",
+    "engines-node",
+    "package-manager-pinned",
+    "types-node-matches-runtime",
+    "packages",
+    "ci-node-pinned",
+    "editorconfig",
+    "gitignore"
+  ],
+  "packages": ["typescript", "eslint"],
+  "optionalPackages": ["vitest", "vite"]
+}

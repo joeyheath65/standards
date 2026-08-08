@@ -1,0 +1,91 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Lawn Dart shared Renovate preset. Consume with: \"extends\": [\"github>joeyheath65/standards\"]",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":prHourlyLimit2"
+  ],
+  "labels": ["dependencies"],
+  "rangeStrategy": "bump",
+  "terraform": { "enabled": true },
+  "github-actions": { "enabled": true },
+
+  "packageRules": [
+    {
+      "description": "Majors are deliberate. They land on the dashboard and wait for a human.",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "TypeScript 7 is held - native compiler rewrite, shipped 2026-07-08. Review 2026-11-01.",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<7.0.0"
+    },
+    {
+      "description": "Node stays on Active LTS. 26 becomes LTS 2026-10-28; lift this then.",
+      "matchDatasources": ["node-version", "docker"],
+      "matchPackageNames": ["node"],
+      "allowedVersions": "<26.0.0"
+    },
+    {
+      "description": "React and its DOM renderer move together or not at all.",
+      "matchPackageNames": ["react", "react-dom", "@types/react", "@types/react-dom"],
+      "groupName": "react"
+    },
+    {
+      "description": "Tailwind and its PostCSS plugin are one unit after v4.",
+      "matchPackageNames": ["tailwindcss", "@tailwindcss/postcss", "@tailwindcss/vite"],
+      "groupName": "tailwind"
+    },
+    {
+      "description": "Vitest and its companions share a release train.",
+      "matchPackageNames": ["vitest", "@vitest/ui", "@vitest/coverage-v8"],
+      "groupName": "vitest"
+    },
+    {
+      "description": "Firebase SDKs move together.",
+      "matchPackageNames": ["firebase-admin", "firebase-functions", "firebase-tools", "firebase"],
+      "groupName": "firebase"
+    },
+    {
+      "description": "@types/node major must track the Node runtime major - never auto-bump it.",
+      "matchPackageNames": ["@types/node"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "Patch-level dev tooling is noise. Batch it weekly.",
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "matchDepTypes": ["devDependencies"],
+      "groupName": "dev tooling (patch)",
+      "schedule": ["before 6am on monday"]
+    },
+    {
+      "description": "Security fixes jump the queue.",
+      "matchDatasources": ["npm"],
+      "vulnerabilityAlerts": { "enabled": true }
+    }
+  ],
+
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Image tags pinned in compose/versions.env (infra profile)",
+      "managerFilePatterns": ["/compose/versions\\.env$/"],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s*\\n.*?=(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "{{{datasource}}}"
+    },
+    {
+      "customType": "regex",
+      "description": "Node version pinned in .nvmrc",
+      "managerFilePatterns": ["/(^|/)\\.nvmrc$/"],
+      "matchStrings": ["^v?(?<currentValue>\\d+(\\.\\d+)*)\\s*$"],
+      "datasourceTemplate": "node-version",
+      "depNameTemplate": "node"
+    }
+  ]
+}

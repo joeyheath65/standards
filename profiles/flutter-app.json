@@ -1,0 +1,11 @@
+{
+  "id": "flutter-app",
+  "description": "Flutter application. Separate toolchain - no Node checks apply.",
+  "checks": [
+    "dart-sdk-constraint",
+    "flutter-version",
+    "editorconfig",
+    "gitignore"
+  ],
+  "packages": []
+}

@@ -1,0 +1,24 @@
+{
+  "id": "web-next",
+  "description": "Next.js + React + Tailwind application.",
+  "checks": [
+    "nvmrc",
+    "engines-node",
+    "package-manager-pinned",
+    "types-node-matches-runtime",
+    "packages",
+    "ci-node-pinned",
+    "editorconfig",
+    "gitignore"
+  ],
+  "packages": [
+    "next",
+    "react",
+    "react-dom",
+    "tailwindcss",
+    "@tailwindcss/postcss",
+    "typescript",
+    "eslint"
+  ],
+  "optionalPackages": ["vitest", "vite", "firebase-admin", "firebase-tools"]
+}
