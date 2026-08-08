@@ -72,10 +72,16 @@ jobs:
             echo "no typecheck script — skipped"
           fi
 
+      # test-command goes through `env`, not `${{ }}` interpolation. Inlining an
+      # empty input leaves an empty `then` branch, which is a bash syntax error
+      # - and interpolating caller-supplied text straight into a shell is how
+      # you get an injection besides.
       - name: Test
+        env:
+          TEST_CMD: ${{ inputs.test-command }}
         run: |
-          if [ -n "${{ inputs.test-command }}" ]; then
-            ${{ inputs.test-command }}
+          if [ -n "$TEST_CMD" ]; then
+            eval "$TEST_CMD"
           elif node -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)"; then
             ${{ inputs.package-manager }} run test
           else
