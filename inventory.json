@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "updated": "2026-08-08",
+  "purpose": "What Joe actually has. Sessions read this instead of guessing. Every entry carries provenance and a verified date - an unverified claim here is worse than no claim, because it reads as authoritative.",
+
+  "identity": {
+    "entity": "Lawn Dart Systems, LLC",
+    "structure": "solo consultancy, veteran-owned",
+    "primaryEmail": "joe@lawndart.dev",
+    "github": "joeyheath65",
+    "huggingface": "joesmash"
+  },
+
+  "cloud": {
+    "provider": "gcp",
+    "orgId": "95147339940",
+    "billingAccount": { "id": "01AFCF-17141B-DC807B", "name": "Firebase Payment" },
+    "activeProjects": ["slotd-app", "lawn-dart"],
+    "dormantProjects": [
+      "client-mx-campaign", "proposals-static", "gsd-get-shit-done", "checkswingai",
+      "floresville-homepage", "floresville-home", "focusai-9983b", "ads-home-manage",
+      "ads-home-218e7", "legion-442616", "vibrant-petal-442616-u2"
+    ],
+    "defaultRegion": "us-central1",
+    "verified": "2026-05-05",
+    "staleWarning": "Project list and API state were verified 2026-05-05 and have NOT been re-checked. `gcloud auth` was expired as of 2026-08-08. Re-verify before acting on cost or API claims.",
+    "traps": [
+      "The active gcloud project defaults to slotd-app. ALWAYS pass --project explicitly.",
+      "lawn-dart has App Engine, so its project ID is permanently reserved and it cannot be fully deleted.",
+      "lawn-dart has 88 enabled APIs but only ~5 show activity. Dormant Vertex/Discovery Engine/Retail/Vision are billing-surprise vectors - do not enable new APIs there casually.",
+      "9 user-managed SA JSON keys exist across both projects. Prefer workload identity or short-lived tokens over minting another.",
+      "Terraform has no ADC configured; authenticate with GOOGLE_OAUTH_ACCESS_TOKEN from `gcloud auth print-access-token` (~1h lifetime)."
+    ]
+  },
+
+  "workspace": {
+    "provider": "google-workspace",
+    "tier": "Business Standard",
+    "domain": "lawndart.dev",
+    "verified": "2026-05-05",
+    "includes": [
+      "2TB pooled storage", "Shared Drives",
+      "Calendar Appointment Schedules (Stripe-payable booking pages)",
+      "Meet recording (150 cap)", "Gemini in Workspace editors"
+    ],
+    "notIncluded": [
+      "Vault (eDiscovery / retention)", "advanced endpoint management", "Meet capacity above 150"
+    ],
+    "note": "Appointment Schedules is already paid for and replaces Calendly-class tools. Do not propose a Business Plus / Enterprise feature without flagging the tier upgrade."
+  },
+
+  "domains": {
+    "registrar": "squarespace",
+    "note": "DNS is registrar-managed at Squarespace (formerly Google Domains). Records are added by hand in that console - an agent cannot do it. Any DNS step is an OWNER punchlist item.",
+    "active": ["lawndart.dev", "lawndart.cloud"],
+    "nonRenewing": ["lawndart.xyz"],
+    "subdomains": {
+      "lawndart.dev": "public marketing site (Firebase Hosting)",
+      "tools.lawndart.dev": "public Business Tools (Cloud Run)",
+      "dz.lawndart.cloud": "the DZ, IAP-gated internal cockpit (Cloud Run)",
+      "naten.lawndart.dev": "n8n - PUBLIC webhooks/forms ONLY; editor and API are tailnet-only"
+    }
+  },
+
+  "ai": {
+    "primary": "anthropic",
+    "note": "Default to Claude for anything model-shaped. Anthropic API key is configured. When building AI features, target current Claude models rather than a competitor's SDK unless there is a stated reason.",
+    "alsoConfigured": ["openai", "huggingface"],
+    "gcpVertex": "enabled on lawn-dart but DORMANT - counts as a billing-surprise vector, not an available capability"
+  },
+
+  "runtime": {
+    "containerHosting": "cloud-run",
+    "staticHosting": "firebase-hosting",
+    "serverless": "cloud-functions-gen2",
+    "auth": "firebase-auth",
+    "internalAuth": "iap",
+    "secrets": {
+      "cloud": "gcp-secret-manager",
+      "local": "SOPS + age, vault at ~/ops/secrets, key in macOS Keychain (sops-age-key), helper ~/ops/scripts/vault"
+    },
+    "orchestration": {
+      "tool": "n8n",
+      "authoritativeHost": "ld-gcp-vm-auto-01 (GCP, lawn-dart)",
+      "status": "MID-MIGRATION - Hostinger is still the serving instance until gcp-autobot Phase 4",
+      "apiReachability": "tailnet-only. CI, Cloud Run and hosted agents CANNOT reach the n8n API at all."
+    },
+    "observability": "Grafana on the Proxmox homelab, CT110 192.168.0.140",
+    "homelab": "Proxmox cluster (pve1 .100 / pve5 .150). Airflow CT119, NetBox CT202. Quorate but NO HA failover.",
+    "iac": "terraform, remote state gs://ld-lawn-dart-tfstate"
+  },
+
+  "doesNotHave": {
+    "note": "The negative space kills more bad guesses than the positive list. Do not propose anything below without saying it needs to be set up first.",
+    "items": [
+      "No BigQuery billing export - per-SKU cost queries are NOT available from the CLI.",
+      "No Security Command Center on either active project.",
+      "No Recommender API enabled.",
+      "No Cloud SQL instance is known to exist. Verify before assuming one does.",
+      "No HA failover on the homelab cluster - a node going down does not self-heal.",
+      "NetBox's REST API is broken (Invalid v1 token). Use the Django ORM over SSH.",
+      "The claude.ai MCP connector cannot reach n8n on naten (tailnet-only).",
+      "No CI has access to GCP secrets or the VM - GitHub Actions are validate-only by design."
+    ]
+  },
+
+  "placeholderEnvVars": {
+    "note": "SET, not absent. These hold literal placeholder strings, so a script reading one gets truthy garbage and fails far from the cause. Never read them expecting a real value.",
+    "vars": ["FIREBASE_PROJECT_ID", "FIREBASE_API_KEY", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"],
+    "exception": "SUPABASE_URL is real and is a connection string - treat as a secret, never echo it."
+  }
+}

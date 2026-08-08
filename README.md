@@ -100,10 +100,35 @@ the Renovate preset path and the workflow `uses:` line. Fork it, replace
 `baseline.json`, keep everything else. Add a profile rather than a fork when the
 version table is shared and only the checks differ.
 
+## Three files, three lifecycles
+
+| file | answers | changes when |
+|---|---|---|
+| `baseline.json` | *which version* | a version ships |
+| `platform.json` | *which thing to build on* | you change your mind about architecture |
+| `inventory.json` | *what you actually have* | you buy, cancel, or set something up |
+
+Keeping them separate is deliberate. Folding the resource inventory into the
+version table would mean editing a versions file to record that you switched
+registrar.
+
+`inventory.json` exists because sessions guess. Its most useful section is
+`doesNotHave` — most bad guesses are a capability being assumed that was never
+set up, and a positive list alone never catches those.
+
+`platform.json` does not pick your database. Data-store choice is a per-project
+business and architecture decision made on that project's facts
+(`ld-2026-08-08-relational-split-by-role`). What it encodes is the failure mode
+to avoid — relational shapes forced into a document store with the joins
+papered over in application code — and, once you are relational, the role split:
+Cloud SQL when the store is authoritative, Supabase when it is derived.
+
 ## Layout
 
 ```
 baseline.json            the version table — the file you edit
+platform.json            what to build on: stores, compute, auth, secrets, DNS
+inventory.json           what exists: GCP, Workspace, domains, models, homelab
 default.json             shared Renovate preset
 profiles/                which checks apply to which kind of repo
 bin/baseline-check       the checker (terminal, CI, and hook all call this)

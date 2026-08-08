@@ -12,7 +12,9 @@ Guidance for Claude Code working in this repo.
 > |---|---|
 > | current phase, what shipped | `BUILD_PLAN.md` |
 > | what is open right now | `PUNCHLIST.md` |
-> | which tool versions apply | `.baseline.json` + the shared baseline |
+> | which tool versions apply | `.baseline.json` + `standards/baseline.json` |
+> | what to build ON (stores, compute, auth) | `standards/platform.json` |
+> | **what Joe actually has** — never guess this | `standards/inventory.json` |
 > | what Joe has already decided | `~/dev/work/lawndart/.decisions/index.md` |
 
 ## Worklist — start here
@@ -46,6 +48,23 @@ python3 ~/dev/work/lawndart/platform/standards/bin/baseline-check . --quiet
 
 An exception is debt with an expiry date, not permission. If you need one, say
 so and add it with a real `until` and `reason`.
+
+## Resources and platform — do not guess
+
+`standards/inventory.json` is the authority on **what exists**: GCP org and
+projects, Workspace tier, who the domain registrar is, which model vendor is
+default, what the homelab runs — and, more usefully, a `doesNotHave` list.
+Most bad guesses are assuming a capability that was never set up. Read it
+rather than inferring from the code.
+
+`standards/platform.json` is the authority on **what to build on**. Data-store
+choice is a per-project business *and* architecture decision made on that
+project's facts (`ld-2026-08-08-relational-split-by-role`) — record the
+reasoning for this repo below, not just the outcome.
+
+Anything requiring a console step Joe must perform — DNS at Squarespace,
+billing, a Workspace setting — is an **OWNER** punchlist item. Never write a
+plan step that assumes an agent can do it.
 
 ## LawnDart decision log
 

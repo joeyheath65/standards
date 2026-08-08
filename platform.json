@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "updated": "2026-08-08",
+  "purpose": "What to build ON. baseline.json answers 'which version'; this answers 'which thing'. Separate files because they change for different reasons - a version ships, a platform choice is a decision.",
+
+  "dataStores": {
+    "rule": "There is no default. Each project chooses its store as a business AND architecture decision from its own facts - primary client, offline needs, real query shapes, cost, and what is already run well. Record the reasoning in that project's CLAUDE.md.",
+    "theFailureModeThisPrevents": "Relational-shaped data forced into Firestore with the joins papered over in Cloud Functions. That is the mismatch to name early, not a reason to avoid Firestore - Firestore is right where it fits, and slotd-web is the worked example.",
+    "decision": "ld-2026-08-08-relational-split-by-role",
+
+    "relational": {
+      "when": "Joins across three or more entities, aggregate reporting, geospatial queries, constraints that must hold across rows, or any schema you would naturally draw as a foreign-key diagram.",
+      "rule": "SPLIT BY ROLE. The question is never 'which Postgres' - it is 'is this store authoritative'. Answer that first and the vendor follows.",
+      "systemOfRecord": {
+        "use": "cloud-sql-postgres",
+        "region": "us-central1",
+        "why": "Same org, IAM and billing as everything else, private IP, and the same region as Cloud Run. Authoritative data does not take a cross-region hop or sit behind another vendor's connection string.",
+        "auth": "IAM + private IP. No connection string to scope.",
+        "cost": "Bills even at idle. That is the deliberate price of authority - if a workload cannot justify it, it probably is not a system of record."
+      },
+      "readModel": {
+        "use": "supabase-postgres",
+        "why": "Derived, rebuildable, never authoritative - so cross-region latency and a connection-string secret are acceptable costs, and no idle bill is a real win. PostGIS is ready and the pattern is proven.",
+        "secretRule": "Scope SUPABASE_DB_URL to the services that actually query it. slotd-web binds it to 12 callables where only 3 use Postgres; that is the shape to avoid (its P49)."
+      },
+      "decision": "ld-2026-08-08-relational-split-by-role"
+    },
+
+    "documentRealtime": {
+      "when": "A mobile or offline-first client is the primary consumer, writes must queue locally, or a second actor mutates a record live.",
+      "use": "firestore",
+      "why": "Offline persistence and optimistic writes come free from the SDK. Nothing else in the stack gives that. This is a real strength, not a fallback - slotd-web chose it deliberately for field work and it stays.",
+      "reference": "ld-2026-08-03-firestore-stays-slotd-system-of-record"
+    },
+
+    "readModel": {
+      "when": "A query shape the system of record genuinely cannot serve - radius search, faceting, ranking, reporting rollups.",
+      "use": "postgres (derived, rebuildable, never authoritative)",
+      "pattern": "slotd-web discovery/pgProjection.ts is the reference implementation. Rules: the projection write is best-effort and NEVER throws (a derived store must not fail a user's save); it logs at `error` on failure because a swallow is invisible; it no-ops when the secret is unset (that doubles as the rollout switch); and it ships with a rebuild/reconcile script so drift is always repairable.",
+      "spec": "products/slotd-web/docs/superpowers/specs/2026-07-28-postgres-migration-decision-design.md §4 (build rules R1-R6)"
+    },
+
+    "objectStorage": { "use": "gcs", "why": "Same org, same IAM, same billing." },
+    "cache": { "use": "none by default", "why": "Nothing here has the traffic to justify Redis. Add it when a measurement says to, not before." },
+
+    "antiPatterns": [
+      "Modelling relational data in Firestore and papering the joins with Cloud Functions. Name the mismatch early instead of absorbing it in application code.",
+      "Making a read model authoritative. If it cannot be dropped and rebuilt from the system of record, it is not a read model.",
+      "Reaching for a second database because one query is awkward. Two stores is a permanent tax - pay it only for a shape the first genuinely cannot serve.",
+      "Choosing a store because another project uses it. The facts that made it right there may not hold here."
+    ]
+  },
+
+  "compute": {
+    "containerWorkload": { "use": "cloud-run", "region": "us-central1" },
+    "eventHandlers": { "use": "cloud-functions-gen2", "note": "Runtime tracks baseline.json platform.gcfRuntime." },
+    "staticSite": { "use": "firebase-hosting" },
+    "longRunningOrScheduled": {
+      "use": "n8n on naten, or Airflow on the homelab (CT119) for data pipelines",
+      "note": "n8n is the default orchestration layer. Its API is tailnet-only - nothing on CI or Cloud Run can call it. Webhooks are the public surface."
+    },
+    "vm": { "use": "avoid", "why": "One exists (ld-gcp-vm-auto-01) because n8n needs it. A second one needs a real reason." }
+  },
+
+  "identity": {
+    "endUserAuth": "firebase-auth",
+    "internalToolAuth": "iap",
+    "serviceToService": "workload identity or short-lived tokens",
+    "avoid": "minting another service-account JSON key - there are already 9 across two projects"
+  },
+
+  "secrets": {
+    "cloud": "gcp-secret-manager",
+    "local": "SOPS + age (~/ops/secrets)",
+    "rule": "Secret NAMES live in git, values never. Render into a gitignored file at deploy time; never echo a secret into a transcript.",
+    "ci": "GitHub Actions get NO secrets and NO deploy access. Validate-only, by design."
+  },
+
+  "dns": {
+    "registrar": "squarespace",
+    "rule": "Every DNS change is an OWNER punchlist item - it is a console step an agent cannot perform. Never write a plan step that assumes an agent can add a record."
+  },
+
+  "ai": {
+    "default": "anthropic / Claude",
+    "rule": "Target current Claude models. Do not introduce a second model vendor without a stated reason.",
+    "note": "Vertex AI is enabled-but-dormant on lawn-dart. That is a billing risk, not an available capability."
+  },
+
+  "openDecisions": []
+}
