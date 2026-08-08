@@ -1,9 +1,10 @@
 {
   "id": "flutter-app",
-  "description": "Flutter application. Separate toolchain - no Node checks apply.",
+  "description": "Flutter application. Separate toolchain - no Node checks apply. CI via flutter-ci.yml, which reads the Flutter version from baseline.json.",
   "checks": [
     "dart-sdk-constraint",
     "flutter-version",
+    "pubspec-lock-sync",
     "editorconfig",
     "gitignore"
   ],

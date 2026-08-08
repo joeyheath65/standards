@@ -462,6 +462,25 @@ def check_flutter(rep, repo, base, scope=""):
         rep.add(OK, "dart-sdk-constraint", "dart", raw, spec["target"], scope=scope)
 
 
+def check_pubspec_lock(rep, repo, scope=""):
+    """pubspec.yaml and pubspec.lock must agree.
+
+    Dart's equivalent of the npm ci desync that took down a deploy:
+    `flutter pub get --enforce-lockfile` fails when they disagree, and nothing
+    else here would notice."""
+    pub, lock = repo / "pubspec.yaml", repo / "pubspec.lock"
+    if not (pub.is_file() and lock.is_file()):
+        if pub.is_file():
+            rep.add(WARN, "pubspec-lock-sync", "pubspec.lock", "missing", "present",
+                    "no lockfile - builds are not reproducible", scope)
+        return
+    if lock.stat().st_mtime < pub.stat().st_mtime:
+        rep.add(WARN, "pubspec-lock-sync", "pubspec.lock", "older than pubspec.yaml",
+                "regenerated", "run `flutter pub get` and commit the lock", scope)
+    else:
+        rep.add(OK, "pubspec-lock-sync", "pubspec.lock", "present", "in sync", scope=scope)
+
+
 def check_files(rep, repo, prof, scope=""):
     for check, name in (("editorconfig", ".editorconfig"), ("gitignore", ".gitignore")):
         if check in prof.get("checks", []):
@@ -518,6 +537,7 @@ DISPATCH = {
                                                a["today"], a["scope"]),
     "python-version": lambda a: check_python(a["rep"], a["repo"], a["base"], a["scope"]),
     "dart-sdk-constraint": lambda a: check_flutter(a["rep"], a["repo"], a["base"], a["scope"]),
+    "pubspec-lock-sync": lambda a: check_pubspec_lock(a["rep"], a["repo"], a["scope"]),
     "no-latest-tags": lambda a: check_no_latest(a["rep"], a["repo"], a["scope"]),
     "renovate-configured": lambda a: check_renovate(a["rep"], a["repo"], a["scope"]),
 }

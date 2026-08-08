@@ -1,0 +1,104 @@
+name: flutter-ci
+
+# Reusable. Call it from any Flutter or Dart repo:
+#
+#   jobs:
+#     ci:
+#       uses: joeyheath65/standards/.github/workflows/flutter-ci.yml@v1
+#
+# The Flutter version comes from baseline.json (runtimes.flutter.target) so
+# there is one number to change, same as Node. Passing `flutter-version`
+# overrides it — use that only to pin a repo behind the baseline deliberately,
+# and file the exception in .baseline.json so it expires.
+
+on:
+  workflow_call:
+    inputs:
+      flutter-version:
+        description: Overrides the baseline. Leave empty to track baseline.json.
+        type: string
+        default: ''
+      channel:
+        type: string
+        default: stable
+      working-directory:
+        type: string
+        default: .
+      standards-ref:
+        type: string
+        default: v1
+      run-tests:
+        type: string
+        description: "'false' skips the test step for a repo with no tests yet."
+        default: 'true'
+      analyze-fatal-infos:
+        description: "'true' fails on info-level lints as well as warnings."
+        type: string
+        default: 'false'
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Fetch the standards
+        uses: actions/checkout@v7
+        with:
+          repository: joeyheath65/standards
+          ref: ${{ inputs.standards-ref }}
+          path: .standards
+
+      # One number, one place. A repo that hardcodes a Flutter version here
+      # is a repo that silently drifts from every other one.
+      - name: Resolve the Flutter version
+        id: ver
+        run: |
+          if [ -n "${{ inputs.flutter-version }}" ]; then
+            v="${{ inputs.flutter-version }}"
+            echo "using override $v"
+          else
+            v=$(python3 -c "import json;print(json.load(open('${{ github.workspace }}/.standards/baseline.json'))['runtimes']['flutter']['target'])")
+            echo "using baseline $v"
+          fi
+          echo "flutter=$v" >> "$GITHUB_OUTPUT"
+
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: ${{ steps.ver.outputs.flutter }}
+          channel: ${{ inputs.channel }}
+          cache: true
+
+      - name: Versions
+        run: |
+          flutter --version
+          dart --version
+
+      # --frozen fails when pubspec.lock disagrees with pubspec.yaml. Same
+      # class of defect as npm ci refusing an out-of-sync package-lock, and
+      # it took down a deploy here once already.
+      - name: Install
+        run: flutter pub get --enforce-lockfile
+
+      - name: Format check
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze
+        run: |
+          if [ "${{ inputs.analyze-fatal-infos }}" = "true" ]; then
+            flutter analyze --fatal-infos
+          else
+            flutter analyze
+          fi
+
+      - name: Test
+        if: ${{ inputs.run-tests != 'false' }}
+        run: |
+          if [ -d test ] && [ -n "$(find test -name '*_test.dart' -print -quit)" ]; then
+            flutter test
+          else
+            echo "no *_test.dart under test/ — skipped"
+          fi
