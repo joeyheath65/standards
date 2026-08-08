@@ -58,9 +58,20 @@
       "Terraform has no ADC configured; authenticate with GOOGLE_OAUTH_ACCESS_TOKEN from `gcloud auth print-access-token` (~1h lifetime).",
       "gcloud tokens expire and cannot re-auth non-interactively. If a command fails on reauthentication, ask Joe to run `gcloud auth login`."
     ],
-    "openQuestions": [
-      "lawn-dart holds secrets `spine-admin-url` and `spine-database-url`. Nothing in the tree explains what `spine` is or what database that URL points at. Identify or retire."
-    ]
+    "spine": {
+      "belongsTo": "platform/lawndart-cloud",
+      "status": "live",
+      "secrets": ["spine-admin-url", "spine-database-url"],
+      "confirmedBy": "Joe, 2026-08-08",
+      "note": "Recorded because two sessions in a row could not tell what `spine` was from the tree. lawndart-cloud's CLAUDE.md should say what it is and what the database behind spine-database-url actually is."
+    },
+    "retiring": {
+      "client-mx-campaign": {
+        "reason": "old potential client, no longer needed - Joe, 2026-08-08",
+        "state": "GCP project is still billing-enabled on the open account; repo is enrolled and pushed",
+        "action": "unlink billing, archive the repo, drop from projects.json. Its two baseline violations (CI on Node 18, @types/node ^25) are moot - do not spend a deploy test fixing a retiring repo."
+      }
+    }
   },
 
   "workspace": {
@@ -90,6 +101,17 @@
       "dz.lawndart.cloud": "the DZ, IAP-gated internal cockpit (Cloud Run)",
       "naten.lawndart.dev": "n8n - PUBLIC webhooks/forms ONLY; editor and API are tailnet-only"
     }
+  },
+
+  "integrations": {
+    "note": "All confirmed LIVE by Joe 2026-08-08 - these are real accounts, not leftover MCP connections. Assume they exist and are usable rather than proposing a competitor.",
+    "payments": { "vendor": "stripe", "note": "Also Stripe Connect - slotd-app holds STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET and STRIPE_WEBHOOK_SECRET_CONNECT." },
+    "banking": { "vendor": "mercury", "note": "Business banking. Feeds the DZ /loadmaster finance view (spec'd, stub)." },
+    "transactionalEmail": { "vendor": "resend", "note": "resend-api-key on lawn-dart. slotd-app also holds a SENDGRID_API_KEY - two email vendors; Resend is the current one." },
+    "sms": { "vendor": "twilio", "note": "slotd-app holds account SID, auth token, messaging service SID and phone number. Also used for CNAM lookup in phone-intel." },
+    "frontendHosting": { "vendor": "vercel", "note": "Live account. Note the default hosting in platform.json is Cloud Run / Firebase Hosting - use Vercel deliberately, not by habit." },
+    "issueTracking": { "vendor": "atlassian", "note": "Jira + Confluence." },
+    "analytics": { "vendor": "ga4 + meta", "note": "slotd-app holds META_CAPI_TOKEN and META_PIXEL_ID." }
   },
 
   "ai": {
