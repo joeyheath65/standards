@@ -40,6 +40,45 @@ on:
         type: string
         default: 'report'
 
+      # --- cross-repo preset parity (opt-in) -----------------------------
+      # A repo that vendors a copy of a contract file owned by a sibling repo
+      # has no way to notice the day the two diverge. slotd-mobile carries
+      # assets/verticalPresets.json; slotd-web owns the canonical copy and
+      # enforces its own three internal copies with
+      # scripts/check-preset-parity.mjs — a script that cannot see the mobile
+      # fourth copy. This closes that hole.
+      parity-repo:
+        description: >-
+          owner/repo holding the canonical files, e.g. joeyheath65/slotd-app.
+          Empty (default) skips the whole check — and that skip is correct,
+          because the repo has declared it has no sibling contract.
+        type: string
+        default: ''
+      parity-ref:
+        description: Branch or tag in parity-repo. Empty means its default branch.
+        type: string
+        default: ''
+      parity-pairs:
+        description: >-
+          local:remote file pairs, separated by newlines or commas, e.g.
+          assets/verticalPresets.json:functions/src/config/verticalPresets.json
+        type: string
+        default: ''
+      parity-token-secret:
+        description: >-
+          Name of the secret holding a PAT with read access to parity-repo
+          (needed when it is private). Requires the caller to pass
+          `secrets: inherit`. Alternatively pass the token directly as the
+          `parity-token` secret and leave this empty.
+        type: string
+        default: ''
+    secrets:
+      parity-token:
+        description: >-
+          The parity PAT, passed explicitly. Preferred over parity-token-secret
+          because it does not require the caller to inherit every secret it has.
+        required: false
+
 jobs:
   ci:
     runs-on: ubuntu-latest
@@ -140,3 +179,129 @@ jobs:
           else
             echo "no *_test.dart under test/ — skipped"
           fi
+
+  # Separate job: it needs no Flutter, so it runs alongside `ci` and shows up
+  # as its own check rather than hiding inside a green build.
+  #
+  # THE RULE THIS JOB EXISTS TO ENFORCE: the ONLY skip is an empty
+  # `parity-repo`, which is the repo saying it has no sibling contract. Once
+  # `parity-repo` is set, everything below is a HARD FAILURE — no token, an
+  # unclonable repo, an empty pair list, a malformed pair, a missing file on
+  # either side, or a single differing byte. It must NEVER degrade to a skip,
+  # a warning, or `continue-on-error`. A silent no-op here reports green over
+  # a copy nobody verified, which is precisely the drift this was built to
+  # catch: the check would be worse than nothing, because it would look like
+  # coverage.
+  preset-parity:
+    if: ${{ inputs.parity-repo != '' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Not `actions/checkout` with a token, because a missing-token failure
+      # from that action reads as a generic 403 on a repo that "does not
+      # exist". Say what is actually wrong instead.
+      - name: Clone the canonical repo
+        env:
+          PARITY_REPO: ${{ inputs.parity-repo }}
+          PARITY_REF: ${{ inputs.parity-ref }}
+          TOKEN_NAME: ${{ inputs.parity-token-secret }}
+          TOKEN_EXPLICIT: ${{ secrets.parity-token }}
+          TOKEN_NAMED: ${{ secrets[inputs.parity-token-secret] }}
+        run: |
+          set -uo pipefail
+          tok="${TOKEN_EXPLICIT:-$TOKEN_NAMED}"
+          if [ -z "$tok" ]; then
+            echo "::error::preset parity is enabled (parity-repo=$PARITY_REPO) but no token resolved."
+            if [ -n "$TOKEN_NAME" ]; then
+              echo "::error::parity-token-secret='$TOKEN_NAME' was empty. Does that secret exist, and did the caller pass 'secrets: inherit'?"
+            else
+              echo "::error::Pass the PAT as the 'parity-token' secret, or name it with parity-token-secret + 'secrets: inherit'."
+            fi
+            exit 1
+          fi
+
+          args=(--depth 1 --quiet)
+          if [ -n "$PARITY_REF" ]; then
+            args+=(--branch "$PARITY_REF")
+          fi
+          if ! git clone "${args[@]}" \
+                 "https://x-access-token:${tok}@github.com/${PARITY_REPO}.git" \
+                 "$GITHUB_WORKSPACE/.parity"; then
+            echo "::error::could not clone $PARITY_REPO${PARITY_REF:+ (ref $PARITY_REF)}. Check the PAT's scope and that it can read that repo."
+            exit 1
+          fi
+          echo "cloned $PARITY_REPO @ $(git -C "$GITHUB_WORKSPACE/.parity" rev-parse --short HEAD)"
+
+      # BYTES, not parsed JSON. Byte-identical is the contract: slotd-web's
+      # scripts/check-preset-parity.mjs assumes every copy is the same file,
+      # so a reformat that preserves semantics still breaks it. Do not
+      # "improve" this into a jq/json diff.
+      - name: Compare the pairs byte for byte
+        env:
+          PAIRS: ${{ inputs.parity-pairs }}
+          PARITY_REPO: ${{ inputs.parity-repo }}
+        run: |
+          set -uo pipefail
+          sib="$GITHUB_WORKSPACE/.parity"
+
+          mapfile -t entries < <(printf '%s\n' "$PAIRS" | tr ',' '\n')
+          fail=0
+          checked=0
+
+          for raw in "${entries[@]}"; do
+            entry="$(printf '%s' "$raw" | tr -d '[:space:]')"
+            [ -z "$entry" ] && continue
+            case "$entry" in
+              *:*) ;;
+              *) echo "::error::malformed parity pair '$entry' — expected local/path:remote/path"; fail=1; continue ;;
+            esac
+            here="${entry%%:*}"
+            there="${entry#*:}"
+            checked=$((checked + 1))
+
+            if [ ! -f "$here" ]; then
+              echo "::error::$here is missing in this repo (pair '$entry')"
+              fail=1; continue
+            fi
+            if [ ! -f "$sib/$there" ]; then
+              echo "::error::$there is missing in $PARITY_REPO (pair '$entry')"
+              fail=1; continue
+            fi
+
+            if cmp -s "$here" "$sib/$there"; then
+              echo "  ok  $here == $PARITY_REPO:$there  sha256 $(sha256sum "$here" | cut -c1-16)"
+              continue
+            fi
+
+            fail=1
+            echo "::error::preset parity: $here differs from $PARITY_REPO:$there"
+            echo "        local  sha256 $(sha256sum "$here" | cut -d' ' -f1)  $(wc -c <"$here") bytes"
+            echo "        canon  sha256 $(sha256sum "$sib/$there" | cut -d' ' -f1)  $(wc -c <"$sib/$there") bytes"
+            echo "--- diff (canonical -> local) ---"
+            diff -u --label "$PARITY_REPO/$there" "$sib/$there" --label "$here" "$here" | head -400
+            echo "--- end diff ---"
+            {
+              echo "### preset parity FAILED"
+              echo
+              echo "\`$here\` differs from \`$PARITY_REPO:$there\`. Copy the canonical file over; do not hand-edit either side."
+              echo
+              echo '```diff'
+              diff -u --label "$PARITY_REPO/$there" "$sib/$there" --label "$here" "$here" | head -200
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
+
+          # parity-repo was set, so the repo asked for this check. Zero pairs
+          # means it is misconfigured, and passing would be the silent no-op
+          # this job forbids.
+          if [ "$checked" -eq 0 ]; then
+            echo "::error::parity-repo is set but parity-pairs produced no usable pairs. Refusing to report green on an unverified copy."
+            exit 1
+          fi
+
+          [ "$fail" -eq 0 ] || exit 1
+          echo "$checked pair(s) byte-identical to $PARITY_REPO"
