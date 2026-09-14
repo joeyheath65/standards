@@ -1,13 +1,14 @@
 {
   "version": 1,
-  "updated": "2026-08-08",
+  "updated": "2026-09-14",
   "decision": "ld-2026-08-08-toolchain-baseline",
   "sources": {
     "node": "https://nodejs.org/dist/index.json + nodejs/Release schedule.json",
     "npm": "https://registry.npmjs.org/<pkg>/latest",
     "python": "https://endoflife.date/api/python.json",
     "gcfRuntime": "firebase-tools src/deploy/functions/runtimes/supported/types.ts",
-    "flutter": "https://storage.googleapis.com/flutter_infra_release/releases/releases_macos.json"
+    "flutter": "https://storage.googleapis.com/flutter_infra_release/releases/releases_macos.json",
+    "gemini": "live Vertex generateContent calls from lawn-dart/global with Google Search grounding; retirement dates from cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versions"
   },
   "runtimes": {
     "node": {
@@ -125,6 +126,20 @@
         "nodejs20": "2026-10-30",
         "nodejs22": "2028-10-31",
         "nodejs24": "2028-10-31"
+      }
+    }
+  },
+  "ai": {
+    "gemini": {
+      "location": "global",
+      "primary": "gemini-3.8-flash",
+      "fallback": "gemini-3.7-flash",
+      "warnDays": 60,
+      "verified": "2026-09-14",
+      "models": {
+        "gemini-3.8-flash": { "stage": "ga", "retiresOn": null },
+        "gemini-3.7-flash": { "stage": "ga", "retiresOn": null },
+        "gemini-2.5-flash": { "stage": "ga", "retiresOn": "2026-10-16" }
       }
     }
   },
