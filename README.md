@@ -98,6 +98,50 @@ Repos whose work lives entirely in sub-packages omit the root profile:
 { "packages": { "booking": "web-next", "functions": "functions" } }
 ```
 
+## AI models: `ai.gemini`
+
+`baseline.json`'s `ai.gemini` block is the one place a Gemini model id is set.
+No service hardcodes one.
+
+```json
+"ai": { "gemini": {
+  "location": "global", "primary": "gemini-3.8-flash", "fallback": "gemini-3.7-flash",
+  "warnDays": 60, "verified": "2026-09-14",
+  "models": { "gemini-2.5-flash": { "stage": "ga", "retiresOn": "2026-10-16" }, "...": {} }
+} }
+```
+
+- `primary` is the pinned model. It is deliberately not the `gemini-flash-latest`
+  alias, which would silently change a live tool's behaviour and price.
+- `fallback` must be a different model id. Both must be listed in `models`.
+- `models[id].retiresOn` is the published retirement date, or `null` for none.
+- `verified` is the date `primary` and `fallback` were last confirmed by live calls.
+
+**How services consume it.** Each consuming deploy workflow checks out this repo at
+`main` and sets three runtime env vars with `gcloud run deploy --update-env-vars`:
+
+| Env var | From |
+|---|---|
+| `GEMINI_MODEL` | `ai.gemini.primary` |
+| `GEMINI_FALLBACK_MODEL` | `ai.gemini.fallback` |
+| `GEMINI_LOCATION` | `ai.gemini.location` |
+
+Consumers read `main`, not `v1`: a model retirement is not a toolchain rollout.
+
+**Changing a model** is a one-line PR here. Update `primary` or `fallback`, add the
+new id to `models`, and bump `verified`. It reaches each service on that service's
+next deploy.
+
+**Enforcement.** `baseline-check` scans non-test source (`*.ts`, `*.tsx`, `*.js`,
+`*.mjs`, `*.py`) in every enrolled repo, whatever its profile:
+
+- a `gemini-<digit>…` literal is a **warning**, named by `file:line`;
+- a literal whose `retiresOn` is within `warnDays` is a **warning**, and on or past it a
+  **violation**;
+- `primary` and `fallback` get the same retirement test, but only in repos that
+  reference Gemini (a literal, or `GEMINI_MODEL` in source or workflows). Repos with no AI
+  stay quiet.
+
 ## Reusing this outside Lawn Dart
 
 Nothing in the machinery is Lawn Dart specific — the org name appears only in
