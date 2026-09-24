@@ -134,5 +134,23 @@
     "commitConvention": "conventional",
     "requireLinearHistory": false,
     "deleteBranchOnMerge": true
+  },
+  "ai": {
+    "_note": "Model ids are set once here and consumed by deploys, per ld-2026-09-14-gemini-models-set-once-in-standards. Not Terraform variables, and never the gemini-flash-latest alias.",
+    "gemini": {
+      "primary": "gemini-3.8-flash",
+      "fallback": "gemini-3.7-flash",
+      "env": {
+        "model": "GEMINI_MODEL",
+        "fallbackModel": "GEMINI_FALLBACK_MODEL",
+        "location": "GEMINI_LOCATION"
+      }
+    },
+    "anthropic": {
+      "_note": "Tiers per nera/docs/requirements.md \u00a77.4. Ids verified against the n8n Anthropic node's own model list on naten, 2026-09-24.",
+      "core": "claude-sonnet-5",
+      "deep": "claude-opus-5-5",
+      "cheap": "claude-haiku-4-5-20251001"
+    }
   }
 }
