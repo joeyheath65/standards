@@ -522,6 +522,114 @@ def check_renovate(rep, repo, scope=""):
             return
 
 
+# --------------------------------------------------------------- AI models
+
+MODEL_ID = re.compile(r"gemini-\d[\w.-]*")
+AI_SOURCE_EXT = {".ts", ".tsx", ".js", ".mjs", ".py"}
+AI_SKIP_DIRS = {"node_modules", "dist", ".next", ".turbo", "build", "coverage", ".git",
+                "venv", ".venv", "__pycache__", ".claude", "tests", "__tests__", "fixtures"}
+COMMENT_LEAD = ("//", "#", "*", "/*")
+
+
+def is_test_file(name: str) -> bool:
+    return ".test." in name or ".spec." in name or (name.startswith("test_") and name.endswith(".py"))
+
+
+def ai_sources(repo: Path):
+    """Non-test source files, pruned while walking so node_modules is never entered."""
+    for root, dirs, files in os.walk(repo):
+        dirs[:] = sorted(d for d in dirs if d not in AI_SKIP_DIRS)
+        for name in sorted(files):
+            p = Path(root) / name
+            if p.suffix in AI_SOURCE_EXT and not is_test_file(name) and not name.endswith(".min.js"):
+                yield p
+
+
+def check_ai_models(rep, repo, base, today):
+    """Model ids are set once, in baseline.json `ai.gemini`, and reach services
+    as GEMINI_MODEL / GEMINI_FALLBACK_MODEL / GEMINI_LOCATION at deploy.
+
+    A literal in source is how a model retires underneath a live service with
+    nobody noticing: 2.5 Flash was hardcoded in four places across two repos.
+    Runs once per repo, not per package, so a monorepo does not repeat hits.
+    """
+    g = (base.get("ai") or {}).get("gemini")
+    if not isinstance(g, dict):
+        return
+    models = g.get("models") or {}
+    primary, fallback = g.get("primary"), g.get("fallback")
+    try:
+        warn_days = int(g.get("warnDays", 60))
+    except (TypeError, ValueError):
+        warn_days = 60
+
+    shape = []
+    if not primary or not fallback:
+        shape.append("primary and fallback are both required")
+    elif primary == fallback:
+        shape.append(f"fallback must differ from primary ({primary})")
+    for role, mid in (("primary", primary), ("fallback", fallback)):
+        if mid and mid not in models:
+            shape.append(f"{role} {mid} is not listed in models")
+    if shape:
+        rep.add(ERROR, "ai-models", "ai.gemini", "malformed", "valid block",
+                "; ".join(shape))
+
+    def retirement(mid):
+        """(level, note) for a model's retirement date, or (None, '') if none is near."""
+        raw = (models.get(mid) or {}).get("retiresOn")
+        if not raw:
+            return None, ""
+        try:
+            when = dt.date.fromisoformat(raw)
+        except (TypeError, ValueError):
+            return None, ""
+        days = (when - today).days
+        if days <= 0:
+            return ERROR, f"RETIRED {raw}"
+        if days <= warn_days:
+            return WARN, f"retires {raw} - {days} days"
+        return None, ""
+
+    hits, referenced = [], False
+    for f in ai_sources(repo):
+        text = f.read_text(errors="replace")
+        if "GEMINI_MODEL" in text:
+            referenced = True
+        if "gemini-" not in text:
+            continue
+        for i, line in enumerate(text.splitlines(), 1):
+            if line.lstrip().startswith(COMMENT_LEAD):
+                continue
+            for m in MODEL_ID.finditer(line):
+                hits.append((f"{f.relative_to(repo)}:{i}", m.group(0).rstrip(".-")))
+    wf = repo / ".github/workflows"
+    if wf.is_dir():
+        referenced = referenced or any(
+            "GEMINI_MODEL" in f.read_text(errors="replace") for f in wf.glob("*.y*ml"))
+    referenced = referenced or bool(hits)
+    if not referenced:
+        return
+
+    for where, mid in hits:
+        level, note = retirement(mid)
+        detail = "model ids come from standards ai.gemini via GEMINI_MODEL"
+        rep.add(level or WARN, "ai-models", where, mid, "GEMINI_MODEL",
+                f"{detail}; {note}" if note else detail)
+
+    flagged = bool(hits or shape)
+    for role, mid in (("primary", primary), ("fallback", fallback)):
+        if not mid:
+            continue
+        level, note = retirement(mid)
+        if level:
+            flagged = True
+            rep.add(level, "ai-models", f"ai.gemini.{role}", mid, "a live model",
+                    f"{note} - change it in standards baseline.json")
+    if not flagged:
+        rep.add(OK, "ai-models", "ai.gemini", primary, "GEMINI_MODEL")
+
+
 # -------------------------------------------------------------------- main
 
 DISPATCH = {
@@ -598,6 +706,10 @@ def main() -> int:
             return 2
         sub_exc = {**exc, **((cfg.get("packageExceptions") or {}).get(sub) or {})}
         run_profile(rep, repo / sub, sub_prof, base, sub_exc, today, scope=sub)
+
+    # Not a profile check: every profile can call a model, and the scan runs
+    # once at the repo root so monorepo packages do not repeat each hit.
+    check_ai_models(rep, repo, base, today)
 
     if args.json:
         print(json.dumps({

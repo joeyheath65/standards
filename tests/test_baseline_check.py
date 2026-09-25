@@ -26,9 +26,12 @@ bc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bc)
 
 FAILURES = []
+RAN = 0
 
 
 def check(label, got, want):
+    global RAN
+    RAN += 1
     if got != want:
         FAILURES.append(f"{label}: got {got!r}, want {want!r}")
 
@@ -93,10 +96,87 @@ with tempfile.TemporaryDirectory() as d:
     check("reads the installed version", bc.resolved_version(repo, "tailwindcss"), "3.4.19")
     check("absent package is None", bc.resolved_version(repo, "nope"), None)
 
+# ---- AI models -------------------------------------------------------------
+# gemini-2.5-flash was hardcoded in four places across two repos with a
+# retirement date five weeks out. Model ids come from ai.gemini, nowhere else.
+GEMINI = {
+    "location": "global", "primary": "gemini-3.8-flash", "fallback": "gemini-3.7-flash",
+    "warnDays": 60,
+    "models": {
+        "gemini-3.8-flash": {"stage": "ga", "retiresOn": None},
+        "gemini-3.7-flash": {"stage": "ga", "retiresOn": None},
+        "gemini-2.5-flash": {"stage": "ga", "retiresOn": "2026-10-16"},
+    },
+}
+
+
+def ai_rows(files, today="2026-09-14", gemini=None):
+    with tempfile.TemporaryDirectory() as d:
+        repo = Path(d)
+        for rel, body in files.items():
+            (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+            (repo / rel).write_text(body)
+        rep = bc.Report()
+        bc.check_ai_models(rep, repo, {"ai": {"gemini": gemini or GEMINI}},
+                           dt.date.fromisoformat(today))
+        return [r for r in rep.rows if r["check"] == "ai-models"]
+
+
+def levels(rows):
+    return sorted(r["level"] for r in rows if r["level"] != bc.OK)
+
+
+env_only = {"src/vertex.ts": "const model = process.env.GEMINI_MODEL;\n"}
+check("no literals is clean", levels(ai_rows(env_only)), [])
+check("no literals reports ok", [r["level"] for r in ai_rows(env_only)], [bc.OK])
+
+lit = ai_rows({"src/vertex.ts": "import x from 'y';\nconst MODEL = 'gemini-3.8-flash';\n"})
+check("a literal is a warning", levels(lit), [bc.WARN])
+check("the warning names file:line", lit[0]["subject"], "src/vertex.ts:2")
+check("the warning names the model", lit[0]["found"], "gemini-3.8-flash")
+
+check("a retiring literal is a warning",
+      levels(ai_rows({"a.py": "MODEL = 'gemini-2.5-flash'\n"}, today="2026-09-14")), [bc.WARN])
+check("a retired literal is a violation",
+      levels(ai_rows({"a.py": "MODEL = 'gemini-2.5-flash'\n"}, today="2026-10-16")), [bc.ERROR])
+
+near = {**GEMINI, "models": {**GEMINI["models"],
+                             "gemini-3.8-flash": {"stage": "ga", "retiresOn": "2026-10-01"}}}
+prim = ai_rows(env_only, gemini=near)
+check("primary within warnDays is a warning", levels(prim), [bc.WARN])
+check("primary finding names the role", prim[0]["subject"], "ai.gemini.primary")
+check("primary past retiresOn is a violation",
+      levels(ai_rows(env_only, today="2026-10-01", gemini=near)), [bc.ERROR])
+
+check("a test file literal is ignored",
+      ai_rows({"src/vertex.test.ts": "const m = 'gemini-2.5-flash';\n",
+               "tests/test_a.py": "M = 'gemini-2.5-flash'\n"}), [])
+check("node_modules is ignored",
+      ai_rows({"node_modules/@google/genai/index.js": "x = 'gemini-2.5-flash'\n"}), [])
+check("a comment is not a literal",
+      ai_rows({"src/a.ts": "// was gemini-2.5-flash until 2026-09\n"}), [])
+check("no Gemini reference has no AI findings",
+      ai_rows({"src/app.ts": "export const x = 1;\n"}, gemini=near), [])
+
+wf = ai_rows({".github/workflows/deploy.yml": "env:\n  GEMINI_MODEL: x\n"}, gemini=near)
+check("a workflow GEMINI_MODEL counts as a reference", levels(wf), [bc.WARN])
+
+bad = ai_rows({"src/app.ts": "export const x = 1;\n"},
+              gemini={**GEMINI, "fallback": "gemini-3.8-flash"})
+check("primary == fallback is reported", levels(bad), [bc.ERROR])
+check("malformed block is named", bad[0]["subject"], "ai.gemini")
+unlisted = ai_rows(env_only, gemini={**GEMINI, "fallback": "gemini-9-flash"})
+check("fallback missing from models is reported", levels(unlisted), [bc.ERROR])
+
+with open(HERE.parent / "baseline.json") as fh:
+    real = json.load(fh)
+check("the shipped ai.gemini block is well-formed",
+      levels(ai_rows(env_only, gemini=real["ai"]["gemini"])), [])
+
 # ---------------------------------------------------------------------------
 if FAILURES:
-    print(f"FAILED ({len(FAILURES)})")
+    print(f"FAILED ({len(FAILURES)} of {RAN})")
     for f in FAILURES:
         print("  " + f)
     sys.exit(1)
-print("all baseline-check tests passed")
+print(f"all {RAN} baseline-check tests passed")
