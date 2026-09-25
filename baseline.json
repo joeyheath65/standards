@@ -130,6 +130,7 @@
     }
   },
   "ai": {
+    "_note": "Model ids are set once here and consumed by deploys, per ld-2026-09-14-gemini-models-set-once-in-standards. Not Terraform variables, and never the gemini-flash-latest alias.",
     "gemini": {
       "location": "global",
       "primary": "gemini-3.8-flash",
@@ -137,24 +138,19 @@
       "warnDays": 60,
       "verified": "2026-09-14",
       "models": {
-        "gemini-3.8-flash": { "stage": "ga", "retiresOn": null },
-        "gemini-3.7-flash": { "stage": "ga", "retiresOn": null },
-        "gemini-2.5-flash": { "stage": "ga", "retiresOn": "2026-10-16" }
-      }
-    }
-  },
-  "git": {
-    "defaultBranch": "main",
-    "protectMain": true,
-    "commitConvention": "conventional",
-    "requireLinearHistory": false,
-    "deleteBranchOnMerge": true
-  },
-  "ai": {
-    "_note": "Model ids are set once here and consumed by deploys, per ld-2026-09-14-gemini-models-set-once-in-standards. Not Terraform variables, and never the gemini-flash-latest alias.",
-    "gemini": {
-      "primary": "gemini-3.8-flash",
-      "fallback": "gemini-3.7-flash",
+        "gemini-3.8-flash": {
+          "stage": "ga",
+          "retiresOn": null
+        },
+        "gemini-3.7-flash": {
+          "stage": "ga",
+          "retiresOn": null
+        },
+        "gemini-2.5-flash": {
+          "stage": "ga",
+          "retiresOn": "2026-10-16"
+        }
+      },
       "env": {
         "model": "GEMINI_MODEL",
         "fallbackModel": "GEMINI_FALLBACK_MODEL",
@@ -167,5 +163,12 @@
       "deep": "claude-opus-5-5",
       "cheap": "claude-haiku-4-5-20251001"
     }
+  },
+  "git": {
+    "defaultBranch": "main",
+    "protectMain": true,
+    "commitConvention": "conventional",
+    "requireLinearHistory": false,
+    "deleteBranchOnMerge": true
   }
 }
