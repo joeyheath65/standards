@@ -61,6 +61,8 @@ Closed items move to `BUILD_PLAN.md` shipped history in the same commit.
   `slotd-web` currently carries **11 warnings of the 39 remaining that no action can ever clear.**
   *(Filed from a `slotd-web` session 2026-08-11 — `ld-2026-07-31-cross-repo-handoff-via-punchlist`.)*
 
+- P4. `[ ]` **CODE** — punchlist add reissues ids that punchlist close already moved to BUILD_PLAN.md. It scans PUNCHLIST.md only, so every closed id is invisible to the allocator. gcp-autobot already has P7-P11 meaning two different things depending on the file. Fix: scan both files (and any configured shipped-history target) when computing the next id.
+  *(Filed from a `gcp-autobot` session 2026-09-25 as a cross-repo handoff — `ld-2026-07-31-cross-repo-handoff-via-punchlist`.)*
 ## 1 · Deliberate red
 
 ## 2 · Hygiene
