@@ -24,7 +24,8 @@ deterministic parts and exits 1 on any failure.
 - Copies of umbrella agents or skills (`git-ops`, `capture`, `program`). They load from the umbrella.
 - `.claude/commands/`. Use a skill.
 - A tracked `.claude/settings.local.json`.
-- Symlinks into gitignored paths, and dangling symlinks, under `.claude/`.
+- Dangling symlinks under `.claude/`, and symlinks into gitignored paths unless the target
+  is inside a repo registered in `projects.json` (or the `.decisions` repo itself).
 - Inventories in `CLAUDE.md`: plugin, key or repo lists.
 - Conventions duplicated from the umbrella.
 - A repo-level `.mcp.json`. MCP servers go inline in the agent that needs them.
@@ -49,6 +50,7 @@ deterministic parts and exits 1 on any failure.
 
 - A GitHub remote.
 - Branch protection on `main` with required checks.
+- Delete-branch-on-merge enabled.
 
 ## The umbrella
 
