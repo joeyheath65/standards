@@ -16,12 +16,16 @@ pass() { echo "PASS  $1"; }
 fail() { echo "FAIL  $1${2:+ — $2}"; FAILS=$((FAILS + 1)); }
 check() { if [ "$2" = ok ]; then pass "$1"; else fail "$1" "$2"; fi; }
 
-UMBRELLA=no
-[ -f "$R/.decisions/projects.json" ] && UMBRELLA=yes
+# Profiles: umbrella (has .decisions/projects.json), ledger (is .decisions, holds
+# projects.json at its root), or repo.
+PROFILE=repo
+[ -f "$R/.decisions/projects.json" ] && PROFILE=umbrella
+[ "$(basename "$R")" = .decisions ] && [ -f "$R/projects.json" ] && PROFILE=ledger
+UMBRELLA=no; [ $PROFILE = repo ] || UMBRELLA=yes   # umbrella + ledger share the relaxed rules
 ARCHIVED=no
 case "$R" in */archive/*) ARCHIVED=yes ;; esac
 
-echo "check.sh: $R (profile: $([ $UMBRELLA = yes ] && echo umbrella || echo repo))"
+echo "check.sh: $R (profile: $PROFILE)"
 
 # --- archive: the only rule is "no .claude/" -------------------------------
 if [ $ARCHIVED = yes ]; then
@@ -30,8 +34,11 @@ if [ $ARCHIVED = yes ]; then
 fi
 
 # --- required files ---------------------------------------------------------
-REQ="CLAUDE.md .claude/settings.json .claude/git-profile.md .gitignore"
-[ $UMBRELLA = no ] && REQ="$REQ BUILD_PLAN.md"
+case $PROFILE in
+  ledger) REQ=".claude/settings.json .claude/git-profile.md .gitignore" ;;
+  umbrella) REQ="CLAUDE.md .claude/settings.json .claude/git-profile.md .gitignore" ;;
+  *) REQ="CLAUDE.md .claude/settings.json .claude/git-profile.md .gitignore BUILD_PLAN.md" ;;
+esac
 for f in $REQ; do
   if [ -f "$R/$f" ]; then pass "required: $f"; else fail "required: $f" "missing"; fi
 done
@@ -45,7 +52,7 @@ if [ -f "$R/.claude/settings.json" ]; then
 fi
 
 # --- CLAUDE.md shape --------------------------------------------------------
-if [ -f "$R/CLAUDE.md" ]; then
+if [ -f "$R/CLAUDE.md" ] && [ $PROFILE != ledger ]; then
   N=$(wc -l < "$R/CLAUDE.md" | tr -d ' ')
   if [ "$N" -le 150 ]; then pass "CLAUDE.md ≤150 lines ($N)"; else fail "CLAUDE.md ≤150 lines" "$N lines"; fi
 
