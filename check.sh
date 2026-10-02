@@ -134,6 +134,33 @@ if [ $UMBRELLA = no ]; then
 fi
 
 # --- symlinks under .claude/ ------------------------------------------------
+# A symlink into a gitignored path is allowed only when its target sits inside a
+# repo registered in projects.json OTHER than this one, or inside the registry's own
+# repo (.decisions),
+# because those exist on every machine that has the umbrella. Registry found by
+# walking up from the repo; parsed with grep/sed (no jq).
+REG=""; d=$R
+while [ "$d" != "/" ]; do
+  if [ -f "$d/.decisions/projects.json" ]; then REG="$d/.decisions/projects.json"; break; fi
+  if [ "$(basename "$d")" = .decisions ] && [ -f "$d/projects.json" ]; then REG="$d/projects.json"; break; fi
+  d=$(dirname "$d")
+done
+REG_ROOTS=""
+if [ -n "$REG" ]; then
+  ROOT=$(grep -m1 '"root"' "$REG" | sed -E 's/.*"root": *"([^"]*)".*/\1/')
+  REG_ROOTS="$(dirname "$REG")"
+  for p in $(grep -E '^ *"path": *"' "$REG" | sed -E 's/.*"path": *"([^"]*)".*/\1/'); do
+    # The repo's own gitignored paths never count: the exemption is for OTHER repos.
+    [ -d "$ROOT/$p" ] && [ "$(cd "$ROOT/$p" && pwd -P)" != "$R" ] && REG_ROOTS="$REG_ROOTS $(cd "$ROOT/$p" && pwd -P)"
+  done
+fi
+in_registered_repo() {
+  local r
+  for r in $REG_ROOTS; do
+    case "$1" in "$r"|"$r"/*) return 0 ;; esac
+  done
+  return 1
+}
 DANGLING=""; IGNORED=""
 if [ -d "$R/.claude" ]; then
   LINKS=$(find "$R/.claude" -path "$R/.claude/worktrees" -prune -o -type l -print 2>/dev/null)
@@ -143,7 +170,10 @@ if [ -d "$R/.claude" ]; then
     case "$t" in /*) abs=$t ;; *) abs=$(dirname "$l")/$t ;; esac
     real=$(cd "$abs" 2>/dev/null && pwd -P || { d=$(cd "$(dirname "$abs")" 2>/dev/null && pwd -P) && echo "$d/$(basename "$abs")"; })
     case "$real" in
-      "$R"/*) git -C "$R" check-ignore -q --no-index "${real#$R/}" 2>/dev/null && IGNORED="$IGNORED ${l#$R/}" ;;
+      "$R"/*)
+        if git -C "$R" check-ignore -q --no-index "${real#$R/}" 2>/dev/null && ! in_registered_repo "$real"; then
+          IGNORED="$IGNORED ${l#$R/}"
+        fi ;;
     esac
   done
 fi
