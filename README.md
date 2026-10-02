@@ -183,7 +183,7 @@ profiles/                which checks apply to which kind of repo
 bin/baseline-check       the checker (terminal, CI, and hook all call this)
 bin/enroll               non-destructive enrolment
 .github/workflows/       reusable: baseline, node-ci, python-ci
-templates/               CLAUDE.md, PUNCHLIST.md, orient.md, editorconfig
+templates/               CLAUDE.md, BUILD_PLAN.md, git-profile.md, editorconfig
 ```
 
 ## Updating the baseline

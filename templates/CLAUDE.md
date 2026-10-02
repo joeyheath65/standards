@@ -1,106 +1,17 @@
 # CLAUDE.md — <repo>
 
-Guidance for Claude Code working in this repo.
-
-> **This file holds durable facts only.** Architecture, constraints, traps,
-> access patterns. It is loaded automatically at session start and is almost
-> never edited mid-work, which makes it the worst possible home for anything
-> that changes. **No build status, no phase markers, no version numbers.**
-> `baseline-check` fails a CLAUDE.md that carries them.
->
-> | You want to know | Read |
-> |---|---|
-> | current phase, what shipped | `BUILD_PLAN.md` |
-> | what is open right now | `PUNCHLIST.md` |
-> | which tool versions apply | `.baseline.json` + `standards/baseline.json` |
-> | what to build ON (stores, compute, auth) | `standards/platform.json` |
-> | **what Joe actually has** — never guess this | `standards/inventory.json` |
-> | what Joe has already decided | `~/dev/work/lawndart/.decisions/index.md` |
-
-## Worklist — start here
-
-Run `/orient`. It reads the four sources above in order and reports the deltas.
-
-- **`PUNCHLIST.md` — canonical open work.** Every item typed
-  **CODE / OWNER / DOCS / GROWTH**. **OWNER** means a console or config step an
-  agent cannot perform.
-- **`BUILD_PLAN.md` — the phased execution prompt** plus shipped history.
-
-Close an item where you close the work: move it into `BUILD_PLAN.md`'s shipped
-history in the same commit. There is no "prune later" pass — that is how a
-punchlist grows to a thousand lines nobody reads.
-
-**A finding in another repo does not get fixed from here.** File it on that
-project's `PUNCHLIST.md` with `filed by the <this repo> session <date>` and a
-`blocks:` marker if it gates work here — decision
-`ld-2026-07-31-cross-repo-handoff-via-punchlist`. The PreToolUse boundary hook
-enforces this; do not work around it.
-
-## Toolchain
-
-This repo declares its profile and any dated exceptions in `.baseline.json`.
-Versions come from `platform/standards/baseline.json` — **do not restate them
-here.** Check with:
-
-```sh
-python3 ~/dev/work/lawndart/platform/standards/bin/baseline-check . --quiet
-```
-
-An exception is debt with an expiry date, not permission. If you need one, say
-so and add it with a real `until` and `reason`.
-
-## Resources and platform — do not guess
-
-`standards/inventory.json` is the authority on **what exists**: GCP org and
-projects, Workspace tier, who the domain registrar is, which model vendor is
-default, what the homelab runs — and, more usefully, a `doesNotHave` list.
-Most bad guesses are assuming a capability that was never set up. Read it
-rather than inferring from the code.
-
-`standards/platform.json` is the authority on **what to build on**. Data-store
-choice is a per-project business *and* architecture decision made on that
-project's facts (`ld-2026-08-08-relational-split-by-role`) — record the
-reasoning for this repo below, not just the outcome.
-
-Anything requiring a console step Joe must perform — DNS at Squarespace,
-billing, a Workspace setting — is an **OWNER** punchlist item. Never write a
-plan step that assumes an agent can do it.
-
-## LawnDart decision log
-
-- **At session start, READ** `~/dev/work/lawndart/.decisions/index.md`. If
-  `_state.json`'s `last_success` is more than 24h old, **say so**.
-- **When Joe decides, WRITE a record** into `.decisions/records/`
-  (id `ld-YYYY-MM-DD-<slug>`). Draft, confirm the wording, write. **Joe decides.**
-- **Commit locally; never push.** The `SessionStart` hook owns pull and push.
-- **Conflicts escalate, they don't resolve.**
-
 ## What this is
 
-<one paragraph: what the repo does and who it serves>
+<≤2 lines: what the repo does and who it serves>
 
-## Architecture
+## Stack
 
-<the shape. services, boundaries, what talks to what>
+## Commands
 
-## Hard constraints
+## Layout
 
-<the things that must not be violated, and why. be specific — "no latest tags"
-beats "pin dependencies">
+## Gotchas
 
-## Traps
+## Deploy
 
-<what has already bitten someone here. each one cost real time; that is why it
-is written down>
-
-## Working norms
-
-- **Phased + gated:** stop at the end of each `BUILD_PLAN.md` phase, present
-  results, wait for Joe's explicit approval.
-- **Pushback welcome.** Sanity-check plans against ground truth. Prefer the
-  simplest thing that fits the real workload; flag over-engineering.
-- Surprises → stop and ask.
-
-## Repo layout
-
-<dir → purpose, one line each>
+<!-- ≤150 lines total. Overflow goes to .claude/rules/<topic>.md with paths: frontmatter. -->
