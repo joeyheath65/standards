@@ -27,4 +27,4 @@ Project number: none
 Owner: none
 
 ## Repo quirks
-- `PUNCHLIST.md` has uncommitted edits from another session. Never stage it with standard work.
+- `PUNCHLIST.md` is retired (open work is GitHub Issues). The main checkout may still hold a stale uncommitted copy from another session: never stage or restore it.

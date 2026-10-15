@@ -92,7 +92,7 @@
 
   "domains": {
     "registrar": "squarespace",
-    "note": "DNS is registrar-managed at Squarespace (formerly Google Domains). Records are added by hand in that console - an agent cannot do it. Any DNS step is an OWNER punchlist item.",
+    "note": "DNS is registrar-managed at Squarespace (formerly Google Domains). Records are added by hand in that console - an agent cannot do it. Any DNS step is an OWNER GitHub issue.",
     "active": ["lawndart.dev", "lawndart.cloud"],
     "nonRenewing": ["lawndart.xyz"],
     "subdomains": {

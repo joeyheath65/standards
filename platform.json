@@ -78,7 +78,7 @@
 
   "dns": {
     "registrar": "squarespace",
-    "rule": "Every DNS change is an OWNER punchlist item - it is a console step an agent cannot perform. Never write a plan step that assumes an agent can add a record."
+    "rule": "Every DNS change is an OWNER GitHub issue - it is a console step an agent cannot perform. Never write a plan step that assumes an agent can add a record."
   },
 
   "ai": {
