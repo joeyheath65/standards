@@ -7,16 +7,37 @@ deterministic parts and exits 1 on any failure.
 
 | Path | Rule |
 |---|---|
-| `AGENTS.md` | The project rules, read by every agent harness. These sections, in this order: `What this is` (≤2 lines), `Stack`, `Commands`, `Layout`, `Gotchas`, `Deploy`. ≤150 lines. Overflow goes to path-scoped `.claude/rules/`. Template: `templates/AGENTS.md`. |
+| `AGENTS.md` | The project rules, read whole by every agent harness at every session start. These sections, in this order: `What this is` (≤2 lines), `Stack`, `Commands`, `Layout`, `Gotchas`, `Deploy`, then optionally `Context files`. ≤150 lines. Overflow goes to on-demand context files (below). Template: `templates/AGENTS.md`. |
 | `CLAUDE.md` | Imports `@AGENTS.md`, then at most a short `# Claude Code` section with Claude-only items (`.claude/` rules, skills, agents, hooks). Template: `templates/CLAUDE.md`. |
 | `BUILD_PLAN.md` | Direction and current phase only. No task lists, no shipped history. Template: `templates/BUILD_PLAN.md`. |
 | `.claude/settings.json` | Committed. |
 | `.claude/git-profile.md` | This repo's git and deploy facts, read by the `git-ops` agent. Template: `templates/git-profile.md`. |
 | `.gitignore` | Ignores `.claude/settings.local.json`, `.claude/worktrees/`, `.claude/agent-memory-local/`. |
 
+## Where a rule goes
+
+Content is placed by what happens if an agent misses it.
+
+| If it's missed... | It goes in |
+|---|---|
+| Something breaks (deploy, data, money, security) and a script can tell | A test or CI check. Prose is the fallback, not the first choice. |
+| Something breaks and only judgement can tell | `AGENTS.md` `Gotchas`, one line each, with the why. |
+| Work in one area goes worse | An on-demand context file: `docs/agents/<topic>.md`, indexed in `AGENTS.md`. |
+| Only matters when certain files are touched, and only Claude needs it | `.claude/rules/<topic>.md` with `paths:` frontmatter. |
+| It's history, status, or a decision | Git history, GitHub Issues, or the `.decisions` repo. Never `AGENTS.md`. |
+
+## On-demand context files
+
+- Live in `docs/agents/<topic>.md`, ≤150 lines each, harness-neutral. Subfolders are allowed and follow the same rules.
+- Indexed in the `AGENTS.md` `## Context files` table: header `| File | Read it when |`, then one row per file, `| \`path\` | trigger |`. The trigger names the files, commands or task that make it relevant.
+- Every mid-task trigger also gets a one-line pointer where the work happens, in `Gotchas` or `Deploy`: "Before <task>, open `<path>`." Agents don't reliably consult the table mid-task (tested on Codex and Claude: pointer-backed files were opened, table-only ones were not). A table-only row is for session-start triggers and reference.
+- Referenced by plain path, never `@`-imported (an import loads it every session, which defeats the point).
+- Every `docs/agents/**/*.md` is in the table, and every path in the table is a regular file inside the repo (no `..`, absolute paths or symlinks). The table may also index existing docs elsewhere in the repo.
+- Shared topic names across repos, where they apply: `deploy.md`, `layout.md`, `env-and-secrets.md`, `design-system.md`, `testing.md`.
+
 ## Allowed, if needed (repo-specific only)
 
-- `.claude/rules/`: every file has `paths:` frontmatter.
+- `.claude/rules/`: every file has `paths:` frontmatter. Claude-only, so harness-neutral guidance goes in `docs/agents/` instead.
 - `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`
 - `docs/specs/`
 

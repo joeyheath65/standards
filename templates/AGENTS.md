@@ -14,4 +14,13 @@
 
 ## Deploy
 
-<!-- ≤150 lines total. Overflow goes to .claude/rules/<topic>.md with paths: frontmatter. -->
+## Context files
+
+Check this table before you start a task, and open a file when its trigger applies.
+
+| File | Read it when |
+|---|---|
+| `docs/agents/deploy.md` | <the files, commands or task that make it relevant> |
+
+<!-- ≤150 lines total. Overflow goes to docs/agents/<topic>.md (≤150 lines each), indexed above by plain path, never @-imported.
+     Every mid-task trigger also gets a pointer in Gotchas or Deploy: "Before <task>, open `docs/agents/<topic>.md`." -->
