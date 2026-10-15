@@ -30,7 +30,7 @@ Content is placed by what happens if an agent misses it.
 
 - Live in `docs/agents/<topic>.md`, ≤150 lines each, harness-neutral. Subfolders are allowed and follow the same rules.
 - Indexed in the `AGENTS.md` `## Context files` table: header `| File | Read it when |`, then one row per file, `| \`path\` | trigger |`. The trigger names the files, commands or task that make it relevant.
-- A table row alone is a weak trigger: agents don't reliably consult it mid-task. When missing a file is costly, also put a one-line pointer where the work happens, in `Gotchas` or `Deploy`: "Before <task>, open `docs/agents/<topic>.md`."
+- Every mid-task trigger also gets a one-line pointer where the work happens, in `Gotchas` or `Deploy`: "Before <task>, open `<path>`." Agents don't reliably consult the table mid-task (tested on Codex and Claude: pointer-backed files were opened, table-only ones were not). A table-only row is for session-start triggers and reference.
 - Referenced by plain path, never `@`-imported (an import loads it every session, which defeats the point).
 - Every `docs/agents/**/*.md` is in the table, and every path in the table is a regular file inside the repo (no `..`, absolute paths or symlinks). The table may also index existing docs elsewhere in the repo.
 - Shared topic names across repos, where they apply: `deploy.md`, `layout.md`, `env-and-secrets.md`, `design-system.md`, `testing.md`.
