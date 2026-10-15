@@ -20,7 +20,7 @@ none
 
 ## Cross-repo hazards
 - Every Lawn Dart repo consumes `baseline.json`, `default.json` and the reusable workflows via `@v1`.
-- `gen-map.sh` writes the umbrella `CLAUDE.md` (`joeyheath65/lawndart-umbrella`); the regenerated map is committed there, not here.
+- `gen-map.sh` writes the umbrella `AGENTS.md` (`CLAUDE.md` until the umbrella moves its rules) (`joeyheath65/lawndart-umbrella`); the regenerated map is committed there, not here.
 
 ## Board
 Project number: none

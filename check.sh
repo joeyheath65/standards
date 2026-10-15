@@ -36,8 +36,8 @@ fi
 # --- required files ---------------------------------------------------------
 case $PROFILE in
   ledger) REQ=".claude/settings.json .claude/git-profile.md .gitignore" ;;
-  umbrella) REQ="CLAUDE.md .claude/settings.json .claude/git-profile.md .gitignore" ;;
-  *) REQ="CLAUDE.md .claude/settings.json .claude/git-profile.md .gitignore BUILD_PLAN.md" ;;
+  umbrella) REQ="AGENTS.md CLAUDE.md .claude/settings.json .claude/git-profile.md .gitignore" ;;
+  *) REQ="AGENTS.md CLAUDE.md .claude/settings.json .claude/git-profile.md .gitignore BUILD_PLAN.md" ;;
 esac
 for f in $REQ; do
   if [ -f "$R/$f" ]; then pass "required: $f"; else fail "required: $f" "missing"; fi
@@ -51,28 +51,37 @@ if [ -f "$R/.claude/settings.json" ]; then
   fi
 fi
 
-# --- CLAUDE.md shape --------------------------------------------------------
+# --- CLAUDE.md imports AGENTS.md --------------------------------------------
 if [ -f "$R/CLAUDE.md" ] && [ $PROFILE != ledger ]; then
-  N=$(wc -l < "$R/CLAUDE.md" | tr -d ' ')
-  if [ "$N" -le 150 ]; then pass "CLAUDE.md ≤150 lines ($N)"; else fail "CLAUDE.md ≤150 lines" "$N lines"; fi
+  if grep -qxE '@AGENTS\.md[[:space:]]*' "$R/CLAUDE.md"; then
+    pass "CLAUDE.md imports @AGENTS.md"
+  else
+    fail "CLAUDE.md imports @AGENTS.md" "no @AGENTS.md line"
+  fi
+fi
+
+# --- AGENTS.md shape (the project rules) ------------------------------------
+if [ -f "$R/AGENTS.md" ] && [ $PROFILE != ledger ]; then
+  N=$(wc -l < "$R/AGENTS.md" | tr -d ' ')
+  if [ "$N" -le 150 ]; then pass "AGENTS.md ≤150 lines ($N)"; else fail "AGENTS.md ≤150 lines" "$N lines"; fi
 
   if [ $UMBRELLA = yes ]; then
-    if grep -q '<!-- map:start -->' "$R/CLAUDE.md" && grep -q '<!-- map:end -->' "$R/CLAUDE.md"; then
-      pass "CLAUDE.md map markers"
+    if grep -q '<!-- map:start -->' "$R/AGENTS.md" && grep -q '<!-- map:end -->' "$R/AGENTS.md"; then
+      pass "AGENTS.md map markers"
     else
-      fail "CLAUDE.md map markers" "<!-- map:start --> / <!-- map:end --> missing"
+      fail "AGENTS.md map markers" "<!-- map:start --> / <!-- map:end --> missing"
     fi
   else
     WANT="What this is|Stack|Commands|Layout|Gotchas|Deploy"
-    GOT=$(grep -E '^## ' "$R/CLAUDE.md" | sed 's/^## *//; s/[[:space:]]*$//' | grep -xE "$WANT" | tr '\n' '|' | sed 's/|$//')
+    GOT=$(grep -E '^## ' "$R/AGENTS.md" | sed 's/^## *//; s/[[:space:]]*$//' | grep -xE "$WANT" | tr '\n' '|' | sed 's/|$//')
     if [ "$GOT" = "$WANT" ]; then
-      pass "CLAUDE.md sections in order"
+      pass "AGENTS.md sections in order"
     else
-      fail "CLAUDE.md sections in order" "want [$WANT], found [${GOT:-none}]"
+      fail "AGENTS.md sections in order" "want [$WANT], found [${GOT:-none}]"
     fi
-    if grep -qE '^## What this is[[:space:]]*$' "$R/CLAUDE.md"; then
-      W=$(awk '/^## What this is[[:space:]]*$/{f=1;next} /^#/{if(f)exit} f && NF{c++} END{print c+0}' "$R/CLAUDE.md")
-      if [ "$W" -le 2 ]; then pass "CLAUDE.md 'What this is' ≤2 lines"; else fail "CLAUDE.md 'What this is' ≤2 lines" "$W lines"; fi
+    if grep -qE '^## What this is[[:space:]]*$' "$R/AGENTS.md"; then
+      W=$(awk '/^## What this is[[:space:]]*$/{f=1;next} /^#/{if(f)exit} f && NF{c++} END{print c+0}' "$R/AGENTS.md")
+      if [ "$W" -le 2 ]; then pass "AGENTS.md 'What this is' ≤2 lines"; else fail "AGENTS.md 'What this is' ≤2 lines" "$W lines"; fi
     fi
   fi
 fi

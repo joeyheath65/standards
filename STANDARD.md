@@ -7,7 +7,8 @@ deterministic parts and exits 1 on any failure.
 
 | Path | Rule |
 |---|---|
-| `CLAUDE.md` | These sections, in this order: `What this is` (≤2 lines), `Stack`, `Commands`, `Layout`, `Gotchas`, `Deploy`. ≤150 lines. Overflow goes to path-scoped `.claude/rules/`. Template: `templates/CLAUDE.md`. |
+| `AGENTS.md` | The project rules, read by every agent harness. These sections, in this order: `What this is` (≤2 lines), `Stack`, `Commands`, `Layout`, `Gotchas`, `Deploy`. ≤150 lines. Overflow goes to path-scoped `.claude/rules/`. Template: `templates/AGENTS.md`. |
+| `CLAUDE.md` | Imports `@AGENTS.md`, then at most a short `# Claude Code` section with Claude-only items (`.claude/` rules, skills, agents, hooks). Template: `templates/CLAUDE.md`. |
 | `BUILD_PLAN.md` | Direction and current phase only. No task lists, no shipped history. Template: `templates/BUILD_PLAN.md`. |
 | `.claude/settings.json` | Committed. |
 | `.claude/git-profile.md` | This repo's git and deploy facts, read by the `git-ops` agent. Template: `templates/git-profile.md`. |
@@ -26,15 +27,15 @@ deterministic parts and exits 1 on any failure.
 - A tracked `.claude/settings.local.json`.
 - Dangling symlinks under `.claude/`, and symlinks into gitignored paths unless the target
   is inside a repo registered in `projects.json` (or the `.decisions` repo itself).
-- Inventories in `CLAUDE.md`: plugin, key or repo lists.
+- Inventories in `AGENTS.md` or `CLAUDE.md`: plugin, key or repo lists.
 - Conventions duplicated from the umbrella.
 - A repo-level `.mcp.json`. MCP servers go inline in the agent that needs them.
-- Decision logs in `CLAUDE.md`. Decisions go to the `.decisions` repo.
+- Decision logs in `AGENTS.md` or `CLAUDE.md`. Decisions go to the `.decisions` repo.
 - `PUNCHLIST.md`, `docs/handoff*`, `*SESSION-LOG*`, `docs/prompts/`.
 - Any `.claude/` in a repo under `archive/`.
 
 `check.sh` doesn't check "inventories", "duplicated conventions" or "decision logs" in
-`CLAUDE.md`. Those need judgement; the 150-line cap is the backstop.
+`AGENTS.md`. Those need judgement; the 150-line cap is the backstop.
 
 ## System of record
 
@@ -55,6 +56,6 @@ deterministic parts and exits 1 on any failure.
 ## The umbrella
 
 `~/dev/work/lawndart` gets its own profile in `check.sh` (detected by `.decisions/projects.json`).
-Its `CLAUDE.md` holds routing and a generated repo map between `<!-- map:start -->` and
+Its `AGENTS.md` holds routing and a generated repo map between `<!-- map:start -->` and
 `<!-- map:end -->`, so the six-section and `BUILD_PLAN.md` rules don't apply to it.
 Everything else does.

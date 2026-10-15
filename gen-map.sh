@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gen-map.sh [umbrella-root] — regenerate the repo map in the umbrella CLAUDE.md from
+# gen-map.sh [umbrella-root] — regenerate the repo map in the umbrella AGENTS.md from
 # .decisions/projects.json. Rewrites only the lines between <!-- map:start --> and
 # <!-- map:end -->. Needs jq.
 
@@ -7,7 +7,8 @@ set -euo pipefail
 
 ROOT=${1:-$HOME/dev/work/lawndart}
 REG="$ROOT/.decisions/projects.json"
-DOC="$ROOT/CLAUDE.md"
+DOC="$ROOT/AGENTS.md"
+[ -f "$DOC" ] || DOC="$ROOT/CLAUDE.md"   # umbrella not yet moved to AGENTS.md
 
 command -v jq >/dev/null || { echo "gen-map: jq not found" >&2; exit 1; }
 [ -f "$REG" ] || { echo "gen-map: $REG not found" >&2; exit 1; }
