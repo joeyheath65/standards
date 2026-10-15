@@ -91,24 +91,38 @@ fi
 if [ -f "$R/AGENTS.md" ] && [ $PROFILE != ledger ]; then
   CTX=$(awk '/^## Context files[[:space:]]*$/{f=1;next} /^## /{if(f)exit} f' "$R/AGENTS.md")
   if [ -d "$R/docs/agents" ] || [ -n "$CTX" ]; then
-    if [ -n "$CTX" ]; then pass "AGENTS.md has a Context files table"; else fail "AGENTS.md has a Context files table" "docs/agents/ exists but no '## Context files' section"; fi
+    if printf '%s\n' "$CTX" | grep -qiE '^\|[[:space:]]*File[[:space:]]*\|[[:space:]]*Read it when[[:space:]]*\|[[:space:]]*$'; then
+      pass "AGENTS.md has a Context files table"
+    else
+      fail "AGENTS.md has a Context files table" "need a '## Context files' section with a '| File | Read it when |' header"
+    fi
     DL=$(grep -nE '^## Deploy[[:space:]]*$' "$R/AGENTS.md" | head -1 | cut -d: -f1)
     CL=$(grep -nE '^## Context files[[:space:]]*$' "$R/AGENTS.md" | head -1 | cut -d: -f1)
     if [ -n "$CL" ] && [ -n "$DL" ] && [ "$CL" -lt "$DL" ]; then fail "Context files comes after Deploy" "line $CL before Deploy at $DL"; fi
-    LISTED=$(printf '%s\n' "$CTX" | grep -E '^\|' | sed -nE 's/^\|[[:space:]]*`([^`]+)`.*/\1/p' | sort -u)
-    MISSING=""; for f in $LISTED; do [ -f "$R/$f" ] || MISSING="$MISSING $f"; done
-    if [ -n "$MISSING" ]; then fail "context files exist" "$MISSING"; else pass "context files exist"; fi
-    ORPHANS=""; LONG=""
-    for p in "$R"/docs/agents/*.md; do
-      [ -f "$p" ] || continue
-      f=${p#$R/}
-      printf '%s\n' "$LISTED" | grep -qxF "$f" || ORPHANS="$ORPHANS $f"
-      n=$(wc -l < "$p" | tr -d ' '); [ "$n" -le 150 ] || LONG="$LONG $f($n)"
+    # Data rows: skip the header and the |---| separator.
+    ROWS=$(printf '%s\n' "$CTX" | grep -E '^\|' | grep -viE '^\|[[:space:]]*File[[:space:]]*\|' | grep -vE '^\|[[:space:]:|-]*$')
+    BADROWS=$(printf '%s\n' "$ROWS" | awk -F'|' 'NF && ($2 !~ /^[[:space:]]*`[^`]+`[[:space:]]*$/ || $3 ~ /^[[:space:]]*(<.*>)?[[:space:]]*$/){print}' | wc -l | tr -d ' ')
+    if [ "$BADROWS" -eq 0 ]; then pass "context rows are | \`path\` | trigger |"; else fail "context rows are | \`path\` | trigger |" "$BADROWS row(s) without a backticked path or a trigger"; fi
+    LISTED=$(printf '%s\n' "$ROWS" | sed -nE 's/^\|[[:space:]]*`([^`]+)`.*/\1/p' | sort -u)
+    MISSING=""; ESCAPE=""
+    for f in $LISTED; do
+      case $f in /*|\~*|*..*) ESCAPE="$ESCAPE $f"; continue ;; esac
+      { [ -f "$R/$f" ] && [ ! -L "$R/$f" ]; } || MISSING="$MISSING $f"
     done
+    if [ -n "$ESCAPE" ]; then fail "context paths stay inside the repo" "$ESCAPE"; else pass "context paths stay inside the repo"; fi
+    if [ -n "$MISSING" ]; then fail "context files exist (no symlinks)" "$MISSING"; else pass "context files exist (no symlinks)"; fi
+    ORPHANS=""; LONG=""
+    if [ -d "$R/docs/agents" ]; then
+      for p in $(find "$R/docs/agents" -name '*.md' \( -type f -o -type l \) | sort); do
+        f=${p#$R/}
+        printf '%s\n' "$LISTED" | grep -qxF "$f" || ORPHANS="$ORPHANS $f"
+        n=$(wc -l < "$p" | tr -d ' '); [ "$n" -le 150 ] || LONG="$LONG $f($n)"
+      done
+    fi
     if [ -n "$ORPHANS" ]; then fail "docs/agents files indexed" "$ORPHANS"; else pass "docs/agents files indexed"; fi
     if [ -n "$LONG" ]; then fail "docs/agents files ≤150 lines" "$LONG"; else pass "docs/agents files ≤150 lines"; fi
   fi
-  EAGER=$(grep -lE '(^|[[:space:]])@docs/agents/' "$R/AGENTS.md" "$R/CLAUDE.md" 2>/dev/null | sed "s|$R/||" | tr '\n' ' ')
+  EAGER=$(grep -lE '(^|[[:space:]])@(\./)?docs/agents/' "$R/AGENTS.md" "$R/CLAUDE.md" 2>/dev/null | sed "s|$R/||" | tr '\n' ' ')
   if [ -n "$EAGER" ]; then fail "context files not @-imported" "$EAGER"; else pass "context files not @-imported"; fi
 fi
 

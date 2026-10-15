@@ -28,10 +28,11 @@ Content is placed by what happens if an agent misses it.
 
 ## On-demand context files
 
-- Live in `docs/agents/<topic>.md`, ≤150 lines each, harness-neutral.
-- Indexed in the `AGENTS.md` `## Context files` table: one row per file, `| \`path\` | Read it when |`. The trigger names the files, commands or task that make it relevant.
+- Live in `docs/agents/<topic>.md`, ≤150 lines each, harness-neutral. Subfolders are allowed and follow the same rules.
+- Indexed in the `AGENTS.md` `## Context files` table: header `| File | Read it when |`, then one row per file, `| \`path\` | trigger |`. The trigger names the files, commands or task that make it relevant.
+- A table row alone is a weak trigger: agents don't reliably consult it mid-task. When missing a file is costly, also put a one-line pointer where the work happens, in `Gotchas` or `Deploy`: "Before <task>, open `docs/agents/<topic>.md`."
 - Referenced by plain path, never `@`-imported (an import loads it every session, which defeats the point).
-- Every `docs/agents/*.md` is in the table, and every path in the table exists. The table may also index existing docs elsewhere in the repo.
+- Every `docs/agents/**/*.md` is in the table, and every path in the table is a regular file inside the repo (no `..`, absolute paths or symlinks). The table may also index existing docs elsewhere in the repo.
 - Shared topic names across repos, where they apply: `deploy.md`, `layout.md`, `env-and-secrets.md`, `design-system.md`, `testing.md`.
 
 ## Allowed, if needed (repo-specific only)
