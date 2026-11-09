@@ -179,6 +179,7 @@ baseline.json            the version table — the file you edit
 platform.json            what to build on: stores, compute, auth, secrets, DNS
 inventory.json           what exists: GCP, Workspace, domains, models, homelab
 default.json             shared Renovate preset
+automerge.json           opt-in Renovate automerge (minor/patch/pin/digest), non-deploy repos only
 profiles/                which checks apply to which kind of repo
 bin/baseline-check       the checker (terminal, CI, and hook all call this)
 bin/enroll               non-destructive enrolment
