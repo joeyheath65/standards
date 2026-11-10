@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Opt-in Renovate automerge for minor, patch, pin and digest updates. Consume alongside the default preset: \"extends\": [\"github>joeyheath65/standards#v1\", \"github>joeyheath65/standards:automerge#v1\"]. Only for repos where merging to main is not a deploy.",
+  "platformAutomerge": false,
+  "automergeType": "pr",
+  "packageRules": [
+    {
+      "description": "Minor, patch, pin and digest updates merge themselves once CI is green and the release is 3 days old. Majors are untouched and keep dashboard approval. ignoreTests is deliberately unset: a repo with no CI never automerges. platformAutomerge is off so Renovate itself checks CI before merging (no branch protection means GitHub-native auto-merge would not wait).",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "automerge": true,
+      "minimumReleaseAge": "3 days"
+    }
+  ]
+}
