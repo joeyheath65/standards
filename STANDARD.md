@@ -8,11 +8,12 @@ deterministic parts and exits 1 on any failure.
 | Path | Rule |
 |---|---|
 | `AGENTS.md` | The project rules, read whole by every agent harness at every session start. These sections, in this order: `What this is` (≤2 lines), `Stack`, `Commands`, `Layout`, `Gotchas`, `Deploy`, then optionally `Context files`. ≤150 lines. Overflow goes to on-demand context files (below). Template: `templates/AGENTS.md`. |
-| `CLAUDE.md` | Imports `@AGENTS.md`, then at most a short `# Claude Code` section with Claude-only items (`.claude/` rules, skills, agents, hooks). Template: `templates/CLAUDE.md`. |
+| `CLAUDE.md` | Only the line `@AGENTS.md`. It is an adapter with no content of its own (`~/.dotfiles/home/AGENTS.md`, "How the rule files fit"). Claude-only items go in `AGENTS.md` or `.claude/rules/`. Template: `templates/CLAUDE.md`. |
 | `BUILD_PLAN.md` | Direction and current phase only. No task lists, no shipped history. Template: `templates/BUILD_PLAN.md`. |
 | `.claude/settings.json` | Committed. |
 | `.claude/git-profile.md` | This repo's git and deploy facts, read by the `git-ops` agent. Template: `templates/git-profile.md`. |
 | `.gitignore` | Ignores `.claude/settings.local.json`, `.claude/worktrees/`, `.claude/agent-memory-local/`. |
+| `scripts/gate.sh` | The deterministic gate the `job` playbook runs, and git-ops runs from main's copy before a merge. Line 1 is `GATE: PASS\|FAIL <sha>`, exit 0/1/2, and it fails a branch that edits `scripts/gate.sh` or `.github/workflows` without Joe's go. Template: `~/dev/personal/skills/skills/job/templates/gate.sh`. A repo with a running app gets it from `create-verification-skill`, together with its `verify-<app>` skill. |
 
 ## Where a rule goes
 
@@ -78,5 +79,5 @@ Content is placed by what happens if an agent misses it.
 
 `~/dev/work/lawndart` gets its own profile in `check.sh` (detected by `.decisions/projects.json`).
 Its `AGENTS.md` holds routing and a generated repo map between `<!-- map:start -->` and
-`<!-- map:end -->`, so the six-section and `BUILD_PLAN.md` rules don't apply to it.
+`<!-- map:end -->`, so the six-section, `BUILD_PLAN.md` and `scripts/gate.sh` rules don't apply to it.
 Everything else does.

@@ -37,7 +37,7 @@ fi
 case $PROFILE in
   ledger) REQ=".claude/settings.json .claude/git-profile.md .gitignore" ;;
   umbrella) REQ="AGENTS.md CLAUDE.md .claude/settings.json .claude/git-profile.md .gitignore" ;;
-  *) REQ="AGENTS.md CLAUDE.md .claude/settings.json .claude/git-profile.md .gitignore BUILD_PLAN.md" ;;
+  *) REQ="AGENTS.md CLAUDE.md .claude/settings.json .claude/git-profile.md .gitignore BUILD_PLAN.md scripts/gate.sh" ;;
 esac
 for f in $REQ; do
   if [ -f "$R/$f" ]; then pass "required: $f"; else fail "required: $f" "missing"; fi
@@ -58,6 +58,8 @@ if [ -f "$R/CLAUDE.md" ] && [ $PROFILE != ledger ]; then
   else
     fail "CLAUDE.md imports @AGENTS.md" "no @AGENTS.md line"
   fi
+  EXTRA=$(grep -cvE '^[[:space:]]*(@AGENTS\.md[[:space:]]*)?$' "$R/CLAUDE.md")
+  if [ "$EXTRA" -eq 0 ]; then pass "CLAUDE.md is only the adapter"; else fail "CLAUDE.md is only the adapter" "$EXTRA line(s) besides @AGENTS.md; move them to AGENTS.md"; fi
 fi
 
 # --- AGENTS.md shape (the project rules) ------------------------------------
