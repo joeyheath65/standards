@@ -1,25 +1,33 @@
 name: renovate
 
-# Self-hosted Renovate. Reusable — call it from any repo:
+# Self-hosted Renovate. Reusable - call it from any repo:
 #
 #   jobs:
 #     renovate:
 #       uses: joeyheath65/standards/.github/workflows/renovate.yml@v1
+#       secrets:
+#         app-client-id: ${{ secrets.RENOVATE_APP_CLIENT_ID }}
+#         app-private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
 #
-# Why self-hosted rather than the Mend-hosted GitHub App: this needs no
-# third-party app granted access to the account, and no long-lived PAT stored
-# as a secret. Each repo runs Renovate against ITSELF using the Actions
-# GITHUB_TOKEN, which is already scoped to exactly that repo and expires with
-# the job.
+# Each repo runs Renovate against ITSELF. The token it runs with is picked in
+# this order:
 #
-# THE TRADE-OFF, stated plainly: pull requests opened with GITHUB_TOKEN do NOT
-# trigger other workflows. So a Renovate PR will not run `baseline` or `ci`
-# automatically — you have to push a commit to it, close/reopen it, or click
-# re-run. If that becomes annoying, the fix is a fine-grained PAT stored as
-# RENOVATE_TOKEN; the `token` input below switches to it with no other change.
+#   1. GitHub App. Pass `app-client-id` and `app-private-key` (both). The job
+#      mints an installation token scoped to the calling repo only; it lasts
+#      an hour and is revoked when the job ends. Pull requests are authored by
+#      the App's bot user, so `baseline` and `ci` run on them.
+#   2. PAT. Pass `token`. CI runs on the pull requests; the PAT is long-lived.
+#   3. Neither. The job's GITHUB_TOKEN is used. Pull requests opened with
+#      GITHUB_TOKEN do NOT trigger other workflows, so a Renovate PR gets no
+#      checks until someone pushes to it, closes and reopens it, or re-runs.
 #
-# The hosted App remains a one-click alternative at github.com/apps/renovate
-# and does not have this limitation.
+# Passing only one of the two App secrets falls through to 2 or 3.
+#
+# The App is Joe's own, installed on his repos. It needs these repository
+# permissions: Administration read, Checks read/write, Commit statuses
+# read/write, Contents read/write, Dependabot alerts read, Issues read/write,
+# Merge queues read/write, Metadata read, Pull requests read/write, Workflows
+# read/write. `app-client-id` is the App's Client ID, not its App ID.
 
 on:
   workflow_call:
@@ -32,8 +40,14 @@ on:
         type: string
         default: ''
     secrets:
+      app-client-id:
+        description: Client ID of the Renovate GitHub App. Needs app-private-key too.
+        required: false
+      app-private-key:
+        description: Private key (.pem contents) of the Renovate GitHub App.
+        required: false
       token:
-        description: Optional PAT. Falls back to the job's GITHUB_TOKEN.
+        description: Optional PAT, used when the App secrets are not both set.
         required: false
 
 jobs:
@@ -43,8 +57,18 @@ jobs:
       contents: write
       pull-requests: write
       issues: write        # the dependency dashboard is an issue
+    env:
+      # A step `if:` cannot read secrets, so the check happens here.
+      USE_APP: ${{ secrets.app-client-id != '' && secrets.app-private-key != '' }}
     steps:
       - uses: actions/checkout@v7
+
+      - id: app-token
+        if: env.USE_APP == 'true'
+        uses: actions/create-github-app-token@v3.3.0
+        with:
+          client-id: ${{ secrets.app-client-id }}
+          private-key: ${{ secrets.app-private-key }}
 
       - uses: renovatebot/github-action@v46.2.1
         env:
@@ -56,4 +80,4 @@ jobs:
           RENOVATE_DRY_RUN: ${{ inputs.dry-run }}
           LOG_LEVEL: ${{ inputs.log-level }}
         with:
-          token: ${{ secrets.token || github.token }}
+          token: ${{ steps.app-token.outputs.token || secrets.token || github.token }}
