@@ -25,6 +25,66 @@ resolves against the default branch, not the tag — so Renovate would follow
 `main` while CI follows `v1`, and the tag would stop being the single rollout
 lever. Both consumers must reference the same ref or the design leaks.
 
+## Running Renovate in a repo
+
+Renovate is self-hosted: each repo runs it against itself by calling the reusable
+`renovate.yml` workflow.
+
+```yaml
+# .github/workflows/renovate.yml in the consuming repo
+name: renovate
+
+on:
+  schedule:
+    - cron: '0 12 * * 1'   # Mondays, staggered across repos
+  workflow_dispatch:
+
+jobs:
+  renovate:
+    uses: joeyheath65/standards/.github/workflows/renovate.yml@v1
+    secrets:
+      app-client-id: ${{ secrets.RENOVATE_APP_CLIENT_ID }}
+      app-private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+```
+
+The token Renovate runs with is picked in this order:
+
+1. **GitHub App.** Both `app-client-id` and `app-private-key` are set. The job mints
+   an installation token scoped to the calling repo; it lasts an hour and is revoked
+   when the job ends. Pull requests are authored by the App's bot user
+   (`<app-slug>[bot]`), so `baseline` and `ci` run on them.
+2. **PAT.** Pass `token` instead. CI runs on the pull requests; the PAT is long-lived.
+3. **Neither.** The job's `GITHUB_TOKEN` is used. Pull requests it opens trigger no
+   other workflows, so a Renovate PR has no checks until someone pushes to it,
+   closes and reopens it, or re-runs them.
+
+Passing only one of the two App secrets falls through to 2 or 3.
+
+Set the repo secrets `RENOVATE_APP_CLIENT_ID` (the App's **Client ID**, not its App
+ID) and `RENOVATE_APP_PRIVATE_KEY` (the full `.pem` contents), and install the App on
+the repo.
+
+The App needs these permissions, from Renovate's
+[Running as a GitHub App](https://docs.renovatebot.com/modules/platform/github/#running-as-a-github-app)
+docs:
+
+| Repository permission | Access |
+|---|---|
+| Administration | read |
+| Checks | read + write |
+| Commit statuses | read + write |
+| Contents | read + write |
+| Dependabot alerts | read |
+| Issues | read + write |
+| Merge queues | read + write |
+| Metadata | read |
+| Pull requests | read + write |
+| Workflows | read + write |
+
+The same page also lists the organization permission **Members: read**. It applies
+only when the App is installed on an organization; repos under a personal account
+have no organization permissions to grant.
+
 ## floor vs target
 
 **floor** — CI fails below it. A major line you must not be under.
